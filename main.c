@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 #include <curl/curl.h>
 
 #define MAX_DNS_LEN       512
@@ -21,6 +22,15 @@
 #define MAX_EXP_DATE_LEN  128
 #define MAX_RESPONSE_LEN  8192
 #define MAX_HEADERS_LEN   1024
+
+enum {
+    SEQUENTIAL,
+    RANDOM,
+    MAC_FILE,
+} Scan_Mode;
+
+#define SCAN_MODE SEQUENTIAL
+//#define SCAN_MODE RANDOM
 
 char tmp_url[MAX_URL_LEN]         = {0};
 char tmp_headers[MAX_HEADERS_LEN] = {0};
@@ -60,25 +70,35 @@ char exp_date[MAX_EXP_DATE_LEN] = {0};
     request_headers = NULL;
 
 #define request(DNS, PATH, ...)\
-    make_url(tmp_url, "%s/" PATH,(DNS),__VA_ARGS__);\
+    make_url(tmp_url, "%s" PATH,(DNS),__VA_ARGS__);\
     reset_headers();\
     make_headers();\
     make_request(tmp_url,request_headers);
 
+#define delete_previous_line()\
+    printf("\r\033[1A"); 
 
 size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr) {
     // https://stackoverflow.com/questions/2577654/curl-put-output-into-variable
     strcpy(response,buffer); // this is to save curl response into a variable
 }
 
-int make_request(char *url, struct curl_slist *headers)
+void make_request(char *url, struct curl_slist *headers)
 {
+
     CURL *curl = curl_easy_init();
+
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
+
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 4);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10); // sec
+    
     curl_easy_perform(curl);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
 }
 
 bool grab_token() {
@@ -98,28 +118,7 @@ bool grab_token() {
     }
     token[token_len] = '\0';
     //printf("parsed_token = %s\n", token);
-    if (strlen(token) == 0) return false;
-    return true;
-}
-
-bool grab_expiration_date() {
-    char *i = &(response[0]);
-    int exp_date_len = 0;
-    const char *pattern = "\"phone\"";
-    while (*i != '\0') {
-        if (strncmp(pattern,i,strlen(pattern)) == 0) {
-            i+=strlen(pattern);
-            while(i[0] == ' ' || i[0] == ':') i++;
-            if (i[0] != '"') break;
-            i++;
-            while(i[0] != '"') exp_date[exp_date_len++] = i++[0];
-            break;
-        }
-        i++;
-    }
-    exp_date[exp_date_len] = '\0';
-    //printf("parsed_expiration_date = %s\n", exp_date);
-    if (strlen(exp_date) == 0) return false;
+    if (strlen(token) == 0) return false; // TODO: this can shit things up (async?)
     return true;
 }
 
@@ -154,7 +153,7 @@ void make_headers() {
     add_to_headers("Authorization: Bearer %s", token);
 }
 
-void next_mac() {
+void next_mac_sequential() {
     char mac_no_colon[12+1] = {0};
     for (int i = 0; i < strlen(mac); i++) {
         if (mac[i] != ':') mac_no_colon[strlen(mac_no_colon)] = mac[i];
@@ -176,15 +175,45 @@ void next_mac() {
     //printf("next_mac: %s\n", next_mac);
 
     set_mac(next_mac);
-    encode_mac(next_mac);
+    //encode_mac(next_mac);
+}
+
+void next_mac_random() {
+    char random_mac[12+5+1] = {0};
+    long random_mac_as_int = rand() % (16 * 16 * 16 * 16 * 16 * 16);
+    sprintf(random_mac,"00:1A:79:%02lX:%02lX:%02lX",
+            //random_mac_as_int >> 40 & 0XFF,
+            //random_mac_as_int >> 32 & 0XFF,
+            //random_mac_as_int >> 24 & 0XFF,
+            random_mac_as_int >> 16 & 0XFF,
+            random_mac_as_int >> 8 & 0XFF,
+            random_mac_as_int >> 0 & 0XFF
+            );
+    set_mac(random_mac);
+    //encode_mac(random_mac);
+}
+
+void next_mac() {
+    switch (SCAN_MODE) {
+        case SEQUENTIAL:
+            next_mac_sequential();
+            break;
+        case RANDOM:
+            next_mac_random();
+            break;
+        default:
+            fprintf(stderr,"[!] Unknown mode");
+            exit(1);
+    }
 }
 
 bool get_token() {
     request(dns,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
 
     // don't fail right away
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 10; i++) {
         if (grab_token()) return true;
+        request(dns,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
     }
 
     fprintf(stderr, "[!] Could not get token");
@@ -194,14 +223,35 @@ bool get_token() {
 
 bool get_exp_date() {
     request(dns,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
-    return grab_expiration_date();
+
+    char *i = &(response[0]);
+    int exp_date_len = 0;
+    const char *pattern = "\"phone\"";
+    while (*i != '\0') {
+        if (strncmp(pattern,i,strlen(pattern)) == 0) {
+            i+=strlen(pattern);
+            while(i[0] == ' ' || i[0] == ':') i++;
+            if (i[0] != '"') break;
+            i++;
+            while(i[0] != '"') exp_date[exp_date_len++] = i++[0];
+            break;
+        }
+        i++;
+    }
+    exp_date[exp_date_len] = '\0';
+    //printf("parsed_expiration_date = %s\n", exp_date);
+    if (strlen(exp_date) == 0) return false;
+    return true;
 }
 
 bool is_valid_account() {
+    get_token();
     return get_exp_date();
 }
 
 int main(int argc, char **argv) {
+
+    srand(time(NULL));
 
     set_dns("http://localhost:8008/c/");
     set_mac("00:1A:79:00:00:00");
@@ -209,9 +259,20 @@ int main(int argc, char **argv) {
 
     float request_delay = 0.0; //second
 
+    int mac_count = 0;
+
     while (true) {
-        if (is_valid_account()) printf("mac: %s ; exp: %s\n", mac, exp_date);
+        mac_count++;
+        printf("[%d] %s\n", mac_count, mac);
+        if (is_valid_account()) {
+            delete_previous_line();
+            printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
+        } else { 
+            delete_previous_line();
+        }
         next_mac();
+        //printf("mac: %s\n", mac);
+        //printf("res: %s\n", response);
         sleep(request_delay);
     }
 

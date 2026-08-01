@@ -1,13 +1,16 @@
-/*
-   Inspired from mcbash (https://github.com/dougy147/mcbash)
-   Originally written: 2026.07.31 (YYYY.MM.DD)
-   Last updated: 2026.08.01
-   Source code: https://github.com/dougy147/smac
-   Licence: BSD
-*/
+/*--------------------------------------------------------------*
+ | Source code        : https://github.com/dougy147/smac    |
+ | Originally written : 2026.07.31 (YYYY.MM.DD)                 |
+ | Last updated       : 2026.08.01                              |
+ | Licence            : BSD                                     |
+ *--------------------------------------------------------------*
+ | Inspired from mcbash (https://github.com/dougy147/mcbash)    |
+ *--------------------------------------------------------------*/
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <curl/curl.h>
 
 #define MAX_DNS_LEN       512
@@ -78,7 +81,7 @@ int make_request(char *url, struct curl_slist *headers)
     curl_easy_perform(curl);
 }
 
-void parse_token() {
+bool grab_token() {
     char *i = &(response[0]);
     int token_len = 0;
     const char *pattern = "\"token\"";
@@ -94,10 +97,12 @@ void parse_token() {
         i++;
     }
     token[token_len] = '\0';
-    printf("parsed_token = %s\n", token);
+    //printf("parsed_token = %s\n", token);
+    if (strlen(token) == 0) return false;
+    return true;
 }
 
-void parse_expiration_date() {
+bool grab_expiration_date() {
     char *i = &(response[0]);
     int exp_date_len = 0;
     const char *pattern = "\"phone\"";
@@ -113,7 +118,9 @@ void parse_expiration_date() {
         i++;
     }
     exp_date[exp_date_len] = '\0';
-    printf("parsed_expiration_date = %s\n", exp_date);
+    //printf("parsed_expiration_date = %s\n", exp_date);
+    if (strlen(exp_date) == 0) return false;
+    return true;
 }
 
 void encode_mac(char *mac) {
@@ -131,7 +138,7 @@ void encode_mac(char *mac) {
         mac++;
     }
     encoded_mac[encoded_mac_len] = '\0';
-    printf("encoded_mac = %s\n", encoded_mac);
+    //printf("encoded_mac = %s\n", encoded_mac);
 }
 
 void make_headers() {
@@ -147,22 +154,66 @@ void make_headers() {
     add_to_headers("Authorization: Bearer %s", token);
 }
 
+void next_mac() {
+    char mac_no_colon[12+1] = {0};
+    for (int i = 0; i < strlen(mac); i++) {
+        if (mac[i] != ':') mac_no_colon[strlen(mac_no_colon)] = mac[i];
+    }
+    mac_no_colon[strlen(mac_no_colon)] = '\0';
+
+    long mac_as_int = strtol(mac_no_colon,NULL,16);
+    long next_mac_as_int = (mac_as_int + 1) % 281474976710655;
+    
+    char next_mac[12+5+1] = {0};
+    sprintf(next_mac,"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
+            next_mac_as_int >> 40 & 0XFF,
+            next_mac_as_int >> 32 & 0XFF,
+            next_mac_as_int >> 24 & 0XFF,
+            next_mac_as_int >> 16 & 0XFF,
+            next_mac_as_int >> 8 & 0XFF,
+            next_mac_as_int >> 0 & 0XFF
+            );
+    //printf("next_mac: %s\n", next_mac);
+
+    set_mac(next_mac);
+    encode_mac(next_mac);
+}
+
+bool get_token() {
+    request(dns,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
+
+    // don't fail right away
+    for (int i = 0; i < 3; i++) {
+        if (grab_token()) return true;
+    }
+
+    fprintf(stderr, "[!] Could not get token");
+    exit(1);
+    //return false;
+}
+
+bool get_exp_date() {
+    request(dns,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
+    return grab_expiration_date();
+}
+
+bool is_valid_account() {
+    return get_exp_date();
+}
+
 int main(int argc, char **argv) {
 
     set_dns("http://localhost:8008/c/");
-    set_mac("00:AA:11:BB:22:CC");
+    set_mac("00:1A:79:00:00:00");
+    //set_mac("00:AA:11:BB:22:CC"); //97
 
-    // Step 1: get token
-    request(dns,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
-    parse_token();
+    float request_delay = 0.0; //second
 
-    // Step 2: get profile
-    request(dns,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
-    parse_expiration_date();
-    
-
-    //get_token();
-    //get_profile();
+    while (true) {
+        if (is_valid_account()) printf("mac: %s ; exp: %s\n", mac, exp_date);
+        next_mac();
+        sleep(request_delay);
+    }
 
     return 0;
 }

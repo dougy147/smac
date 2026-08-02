@@ -76,7 +76,7 @@ int scan_mode = RANDOM;
     make_headers();\
     make_request(tmp_url,request_headers);
 
-#define delete_previous_line()\
+#define erase_previous_line()\
     printf("\r\033[1A"); 
 
 #define int_to_mac_string(MAC, MAC_INT)\
@@ -99,7 +99,7 @@ void make_request(char *url, struct curl_slist *headers)
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
+    //curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
 
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 4);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10); // sec
@@ -161,8 +161,8 @@ void make_headers() {
     add_to_headers("Authorization: Bearer %s", token);
 }
 
-int power(int n, unsigned int exp) {
-    int res = 1;
+long power(int n, unsigned int exp) {
+    long res = 1;
     while (exp > 0) {
         res*=n;
         exp--;
@@ -197,7 +197,7 @@ void next_mac_random() {
 
     for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
     long mac_prefix_as_int = strtol(mac_prefix_no_colon,NULL,16);
-
+    
     char random_mac[12+5+1] = {0};
     long random_mac_as_int = mac_prefix_as_int + (rand() % power(16,bytes_to_fill));
     int_to_mac_string(random_mac, random_mac_as_int);
@@ -276,11 +276,9 @@ int main(int argc, char **argv) {
     while (true) {
         mac_count++;
         printf("[%d] %s\n", mac_count, mac);
+        erase_previous_line();
         if (is_valid_account()) {
-            delete_previous_line();
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
-        } else { 
-            delete_previous_line();
         }
         next_mac();
         usleep(request_delay * 1000 * 1000);

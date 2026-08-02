@@ -1,7 +1,7 @@
 /*--------------------------------------------------------------*
  | Source code        : https://github.com/dougy147/smac    |
  | Originally written : 2026.07.31 (YYYY.MM.DD)                 |
- | Last updated       : 2026.08.01                              |
+ | Last updated       : 2026.08.02                              |
  | Licence            : BSD                                     |
  *--------------------------------------------------------------*
  | Inspired from mcbash (https://github.com/dougy147/mcbash)    |
@@ -23,15 +23,6 @@
 #define MAX_RESPONSE_LEN  8192
 #define MAX_HEADERS_LEN   1024
 
-enum {
-    SEQUENTIAL,
-    RANDOM,
-    MAC_FILE,
-} Scan_Mode;
-
-#define SCAN_MODE SEQUENTIAL
-//#define SCAN_MODE RANDOM
-
 char tmp_url[MAX_URL_LEN]         = {0};
 char tmp_headers[MAX_HEADERS_LEN] = {0};
 char response[MAX_RESPONSE_LEN]   = {0};
@@ -44,6 +35,8 @@ char encoded_mac[12+5*3+1]  = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AX
 char sn[MAX_SN_LEN]         = {0};
 char dev_id[MAX_DEV_ID_LEN] = {0};
 
+char mac_prefix[12+5+1] = "00:1A:79";
+
 const char *ua       = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3";
 const char *x_ua     = "Model: MAG250; Link: WiFi";
 const char *stb_lang = "en";
@@ -51,6 +44,14 @@ const char *tz       = "Europe/Amsterdam";
 
 char token[MAX_TOKEN_LEN]       = {0};
 char exp_date[MAX_EXP_DATE_LEN] = {0};
+
+enum {
+    SEQUENTIAL,
+    RANDOM,
+    MAC_FILE,
+} Scan_Mode;
+
+int scan_mode = RANDOM;
 
 #define set_dns(DNS) \
     strcpy(dns,(DNS));
@@ -77,6 +78,13 @@ char exp_date[MAX_EXP_DATE_LEN] = {0};
 
 #define delete_previous_line()\
     printf("\r\033[1A"); 
+
+#define int_to_mac_string(MAC, MAC_INT)\
+    sprintf((MAC),"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",\
+        (MAC_INT) >> 40 & 0XFF, (MAC_INT) >> 32 & 0XFF, \
+        (MAC_INT) >> 24 & 0XFF, (MAC_INT) >> 16 & 0XFF, \
+        (MAC_INT) >> 8 & 0XFF, (MAC_INT) >> 0 & 0XFF);  \
+
 
 size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr) {
     // https://stackoverflow.com/questions/2577654/curl-put-output-into-variable
@@ -118,7 +126,7 @@ bool grab_token() {
     }
     token[token_len] = '\0';
     //printf("parsed_token = %s\n", token);
-    if (strlen(token) == 0) return false; // TODO: this can shit things up (async?)
+    if (strlen(token) == 0) return false;
     return true;
 }
 
@@ -138,7 +146,7 @@ void encode_mac(char *mac) {
     }
     encoded_mac[encoded_mac_len] = '\0';
     //printf("encoded_mac = %s\n", encoded_mac);
-}
+    }
 
 void make_headers() {
     // append headers to request
@@ -153,6 +161,15 @@ void make_headers() {
     add_to_headers("Authorization: Bearer %s", token);
 }
 
+int power(int n, unsigned int exp) {
+    int res = 1;
+    while (exp > 0) {
+        res*=n;
+        exp--;
+    }
+    return res;
+}
+
 void next_mac_sequential() {
     char mac_no_colon[12+1] = {0};
     for (int i = 0; i < strlen(mac); i++) {
@@ -164,37 +181,32 @@ void next_mac_sequential() {
     long next_mac_as_int = (mac_as_int + 1) % 281474976710655;
     
     char next_mac[12+5+1] = {0};
-    sprintf(next_mac,"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
-            next_mac_as_int >> 40 & 0XFF,
-            next_mac_as_int >> 32 & 0XFF,
-            next_mac_as_int >> 24 & 0XFF,
-            next_mac_as_int >> 16 & 0XFF,
-            next_mac_as_int >> 8 & 0XFF,
-            next_mac_as_int >> 0 & 0XFF
-            );
-    //printf("next_mac: %s\n", next_mac);
-
+    int_to_mac_string(next_mac,next_mac_as_int);
     set_mac(next_mac);
-    //encode_mac(next_mac);
 }
 
 void next_mac_random() {
+    // handle prefix
+    char mac_prefix_no_colon[12+1] = {0};
+    for (int i = 0; i < strlen(mac_prefix); i++) {
+        if (mac_prefix[i] != ':') mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = mac_prefix[i];
+    }
+    mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '\0';
+
+    int bytes_to_fill = 12 - strlen(mac_prefix_no_colon);
+
+    for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
+    long mac_prefix_as_int = strtol(mac_prefix_no_colon,NULL,16);
+
     char random_mac[12+5+1] = {0};
-    long random_mac_as_int = rand() % (16 * 16 * 16 * 16 * 16 * 16);
-    sprintf(random_mac,"00:1A:79:%02lX:%02lX:%02lX",
-            //random_mac_as_int >> 40 & 0XFF,
-            //random_mac_as_int >> 32 & 0XFF,
-            //random_mac_as_int >> 24 & 0XFF,
-            random_mac_as_int >> 16 & 0XFF,
-            random_mac_as_int >> 8 & 0XFF,
-            random_mac_as_int >> 0 & 0XFF
-            );
+    long random_mac_as_int = mac_prefix_as_int + (rand() % power(16,bytes_to_fill));
+    int_to_mac_string(random_mac, random_mac_as_int);
     set_mac(random_mac);
     //encode_mac(random_mac);
 }
 
 void next_mac() {
-    switch (SCAN_MODE) {
+    switch (scan_mode) {
         case SEQUENTIAL:
             next_mac_sequential();
             break;
@@ -257,7 +269,7 @@ int main(int argc, char **argv) {
     set_mac("00:1A:79:00:00:00");
     //set_mac("00:AA:11:BB:22:CC"); //97
 
-    float request_delay = 0.0; //second
+    float request_delay = 0.1; //µsecond
 
     int mac_count = 0;
 
@@ -271,9 +283,7 @@ int main(int argc, char **argv) {
             delete_previous_line();
         }
         next_mac();
-        //printf("mac: %s\n", mac);
-        //printf("res: %s\n", response);
-        sleep(request_delay);
+        usleep(request_delay * 1000 * 1000);
     }
 
     return 0;

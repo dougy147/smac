@@ -52,6 +52,9 @@ enum {
 } Scan_Mode;
 
 int scan_mode = RANDOM;
+    
+FILE *mac_file = {0};
+char *mac_file_path = {0};
 
 #define set_dns(DNS) \
     strcpy(dns,(DNS));
@@ -170,7 +173,7 @@ long power(int n, unsigned int exp) {
     return res;
 }
 
-void next_mac_sequential() {
+bool next_mac_sequential() {
     char mac_no_colon[12+1] = {0};
     for (int i = 0; i < strlen(mac); i++) {
         if (mac[i] != ':') mac_no_colon[strlen(mac_no_colon)] = mac[i];
@@ -178,14 +181,15 @@ void next_mac_sequential() {
     mac_no_colon[strlen(mac_no_colon)] = '\0';
 
     long mac_as_int = strtol(mac_no_colon,NULL,16);
-    long next_mac_as_int = (mac_as_int + 1) % 281474976710655;
+    long next_mac_as_int = (mac_as_int + 1) % power(16,12);
     
     char next_mac[12+5+1] = {0};
     int_to_mac_string(next_mac,next_mac_as_int);
     set_mac(next_mac);
+    return true;
 }
 
-void next_mac_random() {
+bool next_mac_random() {
     // handle prefix
     char mac_prefix_no_colon[12+1] = {0};
     for (int i = 0; i < strlen(mac_prefix); i++) {
@@ -203,15 +207,38 @@ void next_mac_random() {
     int_to_mac_string(random_mac, random_mac_as_int);
     set_mac(random_mac);
     //encode_mac(random_mac);
+    return true;
 }
 
-void next_mac() {
+bool next_mac_mac_file() {
+    char next_mac_in_file[12+5+1] = {0};
+    char c;
+    while (true) {
+        if ((c = fgetc(mac_file)) == EOF) {
+            printf("[x] Reached end of file \"%s\"\n", mac_file_path);
+            exit(0);
+        }
+        if (c == ' ' || c == '\n') {
+            if (strlen(next_mac_in_file) > 0) break;
+            continue;
+        }
+        next_mac_in_file[strlen(next_mac_in_file)] = c;
+    }
+
+    set_mac(next_mac_in_file)
+    return true;
+}
+
+bool next_mac() {
     switch (scan_mode) {
         case SEQUENTIAL:
-            next_mac_sequential();
+            return next_mac_sequential();
             break;
         case RANDOM:
-            next_mac_random();
+            return next_mac_random();
+            break;
+        case MAC_FILE:
+            return next_mac_mac_file();
             break;
         default:
             fprintf(stderr,"[!] Unknown mode");
@@ -273,14 +300,25 @@ int main(int argc, char **argv) {
 
     int mac_count = 0;
 
+    scan_mode = MAC_FILE; // tmp 
+    mac_file_path = "./macs.txt"; // tmp
+
+    if (scan_mode == MAC_FILE) {
+        // we have to open provided macfile
+        if (!(mac_file = fopen(mac_file_path,"r"))) {
+            fprintf(stderr, "[!] Could not open file \"%s\"\n", mac_file_path);
+            exit(1);
+        }
+    }
+
     while (true) {
         mac_count++;
-        printf("[%d] %s\n", mac_count, mac);
+        printf("[%d] <%s>\n", mac_count, mac);
         erase_previous_line();
         if (is_valid_account()) {
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
         }
-        next_mac();
+        if (!next_mac()) break;
         usleep(request_delay * 1000 * 1000);
     }
 

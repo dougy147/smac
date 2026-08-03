@@ -12,13 +12,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+
 //#include <curl/curl.h>
 #if defined(__MINGW64__)
-#include "./3rd/curl-8.21.0/include/curl/curl.h"
+    #include "./3rd/curl-8.21.0/include/curl/curl.h"
 #else
-#include "./3rd/curl-8.21.0_6-win64-mingw/include/curl/curl.h"
+    #include "./3rd/curl-8.21.0_6-win64-mingw/include/curl/curl.h"
 #endif
 
+#define DEBUG 0
 
 #define MAX_DNS_LEN       512
 #define MAX_URL_LEN       512
@@ -92,7 +94,7 @@ char *prog_name = {0};
 #define erase_previous_line()\
     printf("\r\033[1A"); 
 
-#define int_to_mac_string(MAC, MAC_INT)\
+#define long_long_to_mac_string(MAC, MAC_INT)\
     sprintf((MAC),"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",\
         (MAC_INT) >> 40 & 0XFF, (MAC_INT) >> 32 & 0XFF, \
         (MAC_INT) >> 24 & 0XFF, (MAC_INT) >> 16 & 0XFF, \
@@ -231,11 +233,11 @@ bool next_mac_sequential() {
     }
     mac_no_colon[strlen(mac_no_colon)] = '\0';
 
-    long long mac_as_int = strtoll(mac_no_colon,NULL,16);
-    long long next_mac_as_int = (mac_as_int + 1) % power(16,12);
+    long long mac_as_long_long = strtoll(mac_no_colon,NULL,16);
+    long long next_mac_as_long_long = (mac_as_long_long + 1) % power(16,12);
     
     char next_mac[12+5+1] = {0};
-    int_to_mac_string(next_mac,next_mac_as_int);
+    long_long_to_mac_string(next_mac,next_mac_as_long_long);
     set_mac(next_mac);
     return true;
 }
@@ -251,13 +253,30 @@ bool next_mac_random() {
     int bytes_to_fill = 12 - strlen(mac_prefix_no_colon);
 
     for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
-    long long mac_prefix_as_int = strtoll(mac_prefix_no_colon,NULL,16);
+    long long mac_prefix_as_long_long = strtoll(mac_prefix_no_colon,NULL,16);
  
     char random_mac[12+5+1] = {0};
-    long long random_mac_as_int = mac_prefix_as_int + (rand() % power(16,bytes_to_fill));
-    int_to_mac_string(random_mac, random_mac_as_int);
+
+    long long random_part = 0;
+    for (int i=1;i<=bytes_to_fill;i++) {
+        random_part += (long long)rand() << ((i-1)*4);
+    }
+    random_part %= power(16,bytes_to_fill);
+    long long random_mac_as_long_long = mac_prefix_as_long_long + random_part;
+    long_long_to_mac_string(random_mac, random_mac_as_long_long);
     set_mac(random_mac);
     //encode_mac(random_mac);
+
+#if DEBUG
+    printf("mac_prefix = %s            \n", mac_prefix);
+    printf("bytes_to_fill = %d\n", bytes_to_fill);
+    printf("power(16,%d) = %lld\n",bytes_to_fill, power(16,bytes_to_fill));
+    printf("mac_prefix_no_colon = %s\n",mac_prefix_no_colon);
+    printf("mac_prefix_as_long_long = %lld\n",mac_prefix_as_long_long);
+    printf("random_part       = %lld\n",random_part);
+    printf("random_mac_as_long_long = %lld\n", random_mac_as_long_long);
+    printf("random_mac = %s\n", random_mac);
+#endif
 
     return true;
 }

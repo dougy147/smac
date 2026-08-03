@@ -12,7 +12,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
-#include <curl/curl.h>
+//#include <curl/curl.h>
+#if defined(__MINGW64__)
+#include "./3rd/curl-8.21.0/include/curl/curl.h"
+#else
+#include "./3rd/curl-8.21.0_6-win64-mingw/include/curl/curl.h"
+#endif
+
 
 #define MAX_DNS_LEN       512
 #define MAX_URL_LEN       512
@@ -29,11 +35,11 @@ char response[MAX_RESPONSE_LEN]   = {0};
 
 struct curl_slist *request_headers = {0};
 
-char dns[MAX_DNS_LEN]       = {0};
-char mac[12+5+1]            = {0}; // 00:AA:11:BB:22:CC\0
-char encoded_mac[12+5*3+1]  = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
-char sn[MAX_SN_LEN]         = {0};
-char dev_id[MAX_DEV_ID_LEN] = {0};
+char server_url[MAX_DNS_LEN] = {0};
+char mac[12+5+1]             = {0}; // 00:AA:11:BB:22:CC\0
+char encoded_mac[12+5*3+1]   = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
+char sn[MAX_SN_LEN]          = {0};
+char dev_id[MAX_DEV_ID_LEN]  = {0};
 
 char mac_prefix[12+5+1] = "00:1A:79";
 
@@ -56,8 +62,12 @@ int scan_mode = RANDOM;
 FILE *mac_file = {0};
 char *mac_file_path = {0};
 
-#define set_dns(DNS) \
-    strcpy(dns,(DNS));
+float request_delay = 0.1 * 1000 * 1000; //µsecond
+
+char *prog_name = {0};
+
+#define set_server_url(DNS) \
+    strcpy(server_url,(DNS));
 
 #define set_mac(MAC) \
     strcpy(mac,(MAC));\
@@ -88,7 +98,12 @@ char *mac_file_path = {0};
         (MAC_INT) >> 24 & 0XFF, (MAC_INT) >> 16 & 0XFF, \
         (MAC_INT) >> 8 & 0XFF, (MAC_INT) >> 0 & 0XFF);  \
 
+#define shift(ptr) (*(ptr)++)
 
+#define arg_match(str)\
+    (strcmp(*argv,(str)) == 0)
+
+/* Curl configuration */
 size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr) {
     // https://stackoverflow.com/questions/2577654/curl-put-output-into-variable
     strcpy(response,buffer); // this is to save curl response into a variable
@@ -104,14 +119,50 @@ void make_request(char *url, struct curl_slist *headers)
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     //curl_easy_setopt(curl, CURLOPT_WRITEDATA, response);
 
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 4);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10); // sec
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)4);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)10); // sec
     
     curl_easy_perform(curl);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 }
 
+void usage(int exit_code) {
+    printf("Usage: %s TODO\n", prog_name);
+    exit(exit_code);
+}
+
+/* Arguments */
+void parse_args(int argc, char **argv) {
+    prog_name = *argv;
+    //printf("prog_name = %s\n", prog_name);
+
+    while (*argv != NULL) {
+        if (arg_match("--help") || arg_match("-h")) {
+            usage(0);
+        } else if (arg_match("--url") || arg_match("-u")) {
+            shift(argv);
+            set_server_url(*argv);
+        } else if (arg_match("--seq")) {
+            scan_mode = SEQUENTIAL;
+        } else if (arg_match("--random")) {
+            scan_mode = RANDOM;
+        } else if (arg_match("--mac-file")) {
+            scan_mode = MAC_FILE;
+            shift(argv);
+            mac_file_path = *argv;
+        } else if (arg_match("--mac-prefix")) {
+            shift(argv);
+            strcpy(mac_prefix,*argv);
+        } else if (arg_match("--delay") || arg_match("-d")) {
+            shift(argv);
+            request_delay = atof(*argv) * 1000 * 1000; // in µsec for usleep
+        }
+        shift(argv);
+    }
+}
+
+/* smac */
 bool grab_token() {
     char *i = &(response[0]);
     int token_len = 0;
@@ -164,8 +215,8 @@ void make_headers() {
     add_to_headers("Authorization: Bearer %s", token);
 }
 
-long power(int n, unsigned int exp) {
-    long res = 1;
+long long power(int n, unsigned int exp) {
+    long long res = 1;
     while (exp > 0) {
         res*=n;
         exp--;
@@ -180,8 +231,8 @@ bool next_mac_sequential() {
     }
     mac_no_colon[strlen(mac_no_colon)] = '\0';
 
-    long mac_as_int = strtol(mac_no_colon,NULL,16);
-    long next_mac_as_int = (mac_as_int + 1) % power(16,12);
+    long long mac_as_int = strtoll(mac_no_colon,NULL,16);
+    long long next_mac_as_int = (mac_as_int + 1) % power(16,12);
     
     char next_mac[12+5+1] = {0};
     int_to_mac_string(next_mac,next_mac_as_int);
@@ -200,13 +251,18 @@ bool next_mac_random() {
     int bytes_to_fill = 12 - strlen(mac_prefix_no_colon);
 
     for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
-    long mac_prefix_as_int = strtol(mac_prefix_no_colon,NULL,16);
-    
+    long long mac_prefix_as_int = strtoll(mac_prefix_no_colon,NULL,16);
+ 
     char random_mac[12+5+1] = {0};
-    long random_mac_as_int = mac_prefix_as_int + (rand() % power(16,bytes_to_fill));
+    long long random_mac_as_int = mac_prefix_as_int + (rand() % power(16,bytes_to_fill));
     int_to_mac_string(random_mac, random_mac_as_int);
     set_mac(random_mac);
     //encode_mac(random_mac);
+
+    printf("mac_prefix = %s\n", mac_prefix);
+    printf("mac_prefix_no_colon = %s\n", mac_prefix_no_colon);
+    printf("mac_prefix_as_int = %lld\n", mac_prefix_as_int);
+
     return true;
 }
 
@@ -247,12 +303,12 @@ bool next_mac() {
 }
 
 bool get_token() {
-    request(dns,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
+    request(server_url,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
 
     // don't fail right away
     for (int i = 0; i < 10; i++) {
         if (grab_token()) return true;
-        request(dns,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
+        request(server_url,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
     }
 
     fprintf(stderr, "[!] Could not get token");
@@ -261,7 +317,7 @@ bool get_token() {
 }
 
 bool get_exp_date() {
-    request(dns,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
+    request(server_url,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
 
     char *i = &(response[0]);
     int exp_date_len = 0;
@@ -292,16 +348,16 @@ int main(int argc, char **argv) {
 
     srand(time(NULL));
 
-    set_dns("http://localhost:8008/c/");
+    set_server_url("http://localhost:8008/c/");
     set_mac("00:1A:79:00:00:00");
     //set_mac("00:AA:11:BB:22:CC"); //97
 
-    float request_delay = 0.1; //µsecond
+    parse_args(argc, argv);
 
     int mac_count = 0;
 
-    scan_mode = MAC_FILE; // tmp 
-    mac_file_path = "./macs.txt"; // tmp
+    //scan_mode = MAC_FILE; // tmp 
+    //mac_file_path = "./macs.txt"; // tmp
 
     if (scan_mode == MAC_FILE) {
         // we have to open provided macfile
@@ -319,7 +375,7 @@ int main(int argc, char **argv) {
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
         }
         if (!next_mac()) break;
-        usleep(request_delay * 1000 * 1000);
+        usleep(request_delay);
     }
 
     return 0;

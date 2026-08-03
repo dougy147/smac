@@ -13,12 +13,12 @@
 #include <unistd.h>
 #include <time.h>
 
-//#include <curl/curl.h>
-#if defined(__MINGW64__)
-    #include "./3rd/curl-8.21.0/include/curl/curl.h"
-#else
-    #include "./3rd/curl-8.21.0_6-win64-mingw/include/curl/curl.h"
-#endif
+#include <curl/curl.h>
+//#if defined(__MINGW64__)
+//    #include "./3rd/curl-8.21.0_6-win64-mingw/include/curl/curl.h"
+//#else
+//    #include "./3rd/curl-8.21.0/include/curl/curl.h"
+//#endif
 
 #define DEBUG 0
 

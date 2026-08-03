@@ -259,10 +259,6 @@ bool next_mac_random() {
     set_mac(random_mac);
     //encode_mac(random_mac);
 
-    printf("mac_prefix = %s\n", mac_prefix);
-    printf("mac_prefix_no_colon = %s\n", mac_prefix_no_colon);
-    printf("mac_prefix_as_int = %lld\n", mac_prefix_as_int);
-
     return true;
 }
 

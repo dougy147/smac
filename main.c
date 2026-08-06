@@ -68,6 +68,16 @@ float request_delay = 0.1 * 1000 * 1000; //µsecond
 
 char *prog_name = {0};
 
+#define MAX_ACCOUNTS 4096 // TODO: dynamic array
+
+typedef struct {
+    char mac[12+5+1];
+    char exp[MAX_EXP_DATE_LEN];
+} Account;
+
+static int FOUND_ACCOUNTS = 0;
+Account accounts[MAX_ACCOUNTS] = {0};
+
 #define set_server_url(DNS) \
     strcpy(server_url,(DNS));
 
@@ -104,6 +114,12 @@ char *prog_name = {0};
 
 #define arg_match(str)\
     (strcmp(*argv,(str)) == 0)
+
+#define add_to_accounts() \
+    Account tmp_account = {0}; \
+    strcpy(tmp_account.mac, mac); \
+    strcpy(tmp_account.exp, exp_date); \
+    accounts[FOUND_ACCOUNTS++] = tmp_account; \
 
 /* Curl configuration */
 size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr) {
@@ -368,6 +384,7 @@ int main(int argc, char **argv) {
     //set_mac("00:AA:11:BB:22:CC"); //97
 
     parse_args(argc, argv);
+    //check_options();
 
     int mac_count = 0;
 
@@ -387,6 +404,7 @@ int main(int argc, char **argv) {
         printf("[%d] <%s>\n", mac_count, mac);
         erase_previous_line();
         if (is_valid_account()) {
+            add_to_accounts();
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
         }
         if (!next_mac()) break;

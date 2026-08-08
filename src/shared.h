@@ -18,6 +18,7 @@ enum {
 } Scan_Mode;
 
 int SCAN_MODE = SEQUENTIAL;
+int MAC_SCANNED_COUNT = 0;
 
 #define set_server_url(DNS) \
     int i = 0; \
@@ -41,4 +42,6 @@ static void GUI_update_mac_label(void);
 static void GUI_add_to_accounts_listbox(void);
 static void GUI_set_server_url_from_entry(void);
 static void GUI_display_error_on_mac_label(char*);
+static void GUI_scan_button_set_label(void);
+static void GUI_scan_button_toggle(void);
 

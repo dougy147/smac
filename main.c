@@ -342,23 +342,22 @@ void *scan(void *a) {
     GUI_set_server_url_from_entry();
     printf("Setting URL: <%s>\n",server_url);
     if (strlen(server_url) == 0) { // TODO: is_invalid(server_url);
-        GUI_display_error_on_mac_label("Please provide a valid URL");
+        GUI_display_error("Please provide a valid URL");
         SCAN_THREAD = 0;
+        GUI_scan_button_set_label();
         return NULL;
     }
 
-    int mac_count = 0;
-
     while (!GRACEFUL_EXIT_ASKED) {
-        mac_count++;
+        MAC_SCANNED_COUNT++;
 #ifdef DEBUG
-        printf("[%d] <%s>\n", mac_count, mac);
+        printf("[%d] <%s>\n", MAC_SCANNED_COUNT, mac);
         erase_previous_line();
 #endif
         if (is_valid_account()) {
             GUI_add_to_accounts_listbox();
 #ifdef DEBUG
-            printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
+            printf("[%d] \033[1;32m%s\033[0m [%s]\n", MAC_SCANNED_COUNT, mac, exp_date);
 #endif
         }
         if (!next_mac()) break;
@@ -386,6 +385,8 @@ void scan_stop() {
     // race condition => thread might never update GRACEFUL_EXIT_ASKED
     GRACEFUL_EXIT_ASKED = false;
 #endif
+    GUI_reset_mac_label();
+    MAC_SCANNED_COUNT = 0;
 }
 
 int main(int argc, char **argv) {

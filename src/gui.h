@@ -8,57 +8,51 @@ GtkBuilder *builder; // = gtk_builder_new ();
 GObject *current_mac_label;
 GObject *accounts_listbox;
 GObject *server_url_entry;
-
-//static void print_hello (GtkWidget *widget, gpointer   data) {
-//    g_print ("Hello World\n");
-//}
+GObject *scan_button;
 
 static void GUI_quit_smac (GtkWindow *window) {
     if (SCAN_THREAD > 0) scan_stop();
     gtk_window_close (window);
 }
 
-static void GUI_update_mac_label() {
-    gtk_label_set_text (GTK_LABEL(current_mac_label), mac);
+static void GUI_reset_mac_label() {
+    gtk_label_set_text (GTK_LABEL(current_mac_label), "");
 }
 
-static void GUI_display_error_on_mac_label(char *err_msg) {
-    gtk_label_set_text (GTK_LABEL(current_mac_label), err_msg);
+static void GUI_update_mac_label() {
+    const char *format = "[%d] Checking: <b><span foreground=\"darkgrey\">\%s</span></b>";
+    char *markup;
+    markup = g_markup_printf_escaped (format, MAC_SCANNED_COUNT, mac);
+    gtk_label_set_markup (GTK_LABEL(current_mac_label), markup);
+    g_free (markup);
+}
+
+static void GUI_display_error(char *err_msg) {
+    //// currently displaying errors on current_mac_label
+    const char *format = "<span foreground=\"red\">\%s</span>";
+    char *markup;
+    markup = g_markup_printf_escaped (format, err_msg);
+    gtk_label_set_markup (GTK_LABEL(current_mac_label), markup);
+    g_free (markup);
+
 }
 
 static void GUI_add_to_accounts_listbox() {
-
-    char account_str[FULL_MAC_STR_LEN+MAX_EXP_DATE_LEN+1] = {0};
-
-    strcat(account_str,"<b>");
-        strcat(account_str,mac);
-    strcat(account_str,"</b>");
-
-    strcat(account_str," ");
-
-    strcat(account_str,"[");
-        strcat(account_str,exp_date);
-    strcat(account_str,"]");
-
-    GtkWidget *account_label = gtk_label_new(account_str);
-    gtk_label_set_markup(GTK_LABEL(account_label),account_str); // to format text in label
+    const char *format = "<b>\%s</b> [\%s]";
+    char *markup;
+    markup = g_markup_printf_escaped (format, mac, exp_date);
+    GtkWidget *account_label = gtk_label_new(markup);
+    gtk_label_set_markup(GTK_LABEL(account_label),markup); // to format text in label
     gtk_list_box_insert(GTK_LIST_BOX(accounts_listbox),account_label,-1); // -1 => end of list
+    g_free (markup);
 }
 
 static void GUI_set_server_url_from_entry() {
+    // TODO: validate url
     const char *user_server_url[MAX_DNS_LEN] = {0};
     *user_server_url = gtk_editable_get_text (GTK_EDITABLE (server_url_entry));
-    //printf("User server url = <%s>\n", *user_server_url);
-    // TODO: trim user input
-    // TODO: validate url
     set_server_url(*user_server_url);
 }
-
-// TODO: i do not know how to pass argument to function
-//       called by a button
-//static void set_mode(int mode) {
-//    SCAN_MODE = mode;
-//}
 
 static void GUI_set_mode_random() {
     SCAN_MODE = RANDOM;
@@ -68,11 +62,45 @@ static void GUI_set_mode_sequential() {
     SCAN_MODE = SEQUENTIAL;
 }
 
+static void GUI_scan_button_set_label() {
+    if (SCAN_THREAD > 0) {
+        gtk_button_set_label ( GTK_BUTTON (scan_button), "Stop");
+    } else {
+        gtk_button_set_label ( GTK_BUTTON (scan_button), "Scan");
+    }
+}
+
+static void GUI_scan_button_toggle() {
+    if (SCAN_THREAD > 0) {
+        scan_stop();
+    } else {
+        scan_start();
+    }
+    GUI_scan_button_set_label();
+}
+
 const char *ui_builder_string = \
 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 "<interface>"
 "    <object id=\"window\" class=\"GtkWindow\">"
 "        <property name=\"title\">smac</property>"
+//// test menu
+//"        <child>"
+//            "  <menu id='menubar'>"
+//            "    <submenu>"
+//            "      <attribute name='label' translatable='yes'>_Edit</attribute>"
+//            "      <item>"
+//            "        <attribute name='label' translatable='yes'>_Copy</attribute>"
+//            "        <attribute name='action'>win.copy</attribute>"
+//            "      </item>"
+//            "      <item>"
+//            "        <attribute name='label' translatable='yes'>_Paste</attribute>"
+//            "        <attribute name='action'>win.paste</attribute>"
+//            "      </item>"
+//            "    </submenu>"
+//            "  </menu>"
+//"        </child>"
+////
 "        <child>"
 "            <object id=\"grid_main\" class=\"GtkGrid\">"
 "                <child>"
@@ -92,7 +120,7 @@ const char *ui_builder_string = \
 "                        <layout>"
 "                            <property name=\"column\">1</property>"
 "                            <property name=\"row\">0</property>"
-"                            <property name=\"column-span\">3</property>"
+"                            <property name=\"column-span\">2</property>"
 "                        </layout>"
 "                    </object>"
 "                </child>"
@@ -136,35 +164,16 @@ const char *ui_builder_string = \
 //"                    </object>"
 //"                </child>"
 "                <child>"
-"                    <object id=\"button_scan_start\" class=\"GtkButton\">"
-"                        <property name=\"label\">Scan</property>"
-"                        <layout>"
-"                            <property name=\"column\">1</property>"
-"                            <property name=\"row\">2</property>"
-"                        </layout>"
-"                    </object>"
-"                </child>"
-"                <child>"
-"                    <object id=\"button_scan_stop\" class=\"GtkButton\">"
-"                        <property name=\"label\">Stop</property>"
-"                        <layout>"
-"                            <property name=\"column\">2</property>"
-"                            <property name=\"row\">2</property>"
-"                        </layout>"
-"                    </object>"
-"                </child>"
-"                <child>"
 "                    <object id=\"mac_current_label\" class=\"GtkLabel\">"
-"                        <attributes>"
-"                            <attribute name=\"weight\" value=\"BOLD\"/>"
-"                            <attribute name=\"background\" value=\"darkgrey\"/>"
-"                        </attributes>"
+//"                        <attributes>"
+//"                            <attribute name=\"weight\" value=\"BOLD\"/>"
+//"                            <attribute name=\"background\" value=\"darkgrey\"/>"
+//"                        </attributes>"
 "                        <layout>"
 "                            <property name=\"column\">0</property>"
 "                            <property name=\"row\">3</property>"
 "                            <property name=\"column-span\">4</property>"
 "                        </layout>"
-//"                        <property name=\"label\">the mac label</property>"
 "                    </object>"
 "                </child>"
 "                <child>"
@@ -191,14 +200,24 @@ const char *ui_builder_string = \
 "                    </object>"
 "                </child>"
 "                <child>"
-"                    <object id=\"quit\" class=\"GtkButton\">"
-"                        <property name=\"label\">Quit</property>"
+"                    <object id=\"button_scan_toggle\" class=\"GtkButton\">"
+"                        <property name=\"label\">Scan</property>"
 "                        <layout>"
 "                            <property name=\"column\">1</property>"
 "                            <property name=\"row\">8</property>"
+//"                            <property name=\"column-span\">2</property>"
 "                        </layout>"
 "                    </object>"
 "                </child>"
+//"                <child>"
+//"                    <object id=\"quit\" class=\"GtkButton\">"
+//"                        <property name=\"label\">Quit</property>"
+//"                        <layout>"
+//"                            <property name=\"column\">1</property>"
+//"                            <property name=\"row\">8</property>"
+//"                        </layout>"
+//"                    </object>"
+//"                </child>"
 "            </object>"
 "        </child>"
 "    </object>"
@@ -214,6 +233,17 @@ static void activate (GtkApplication *app, gpointer user_data) {
     GObject *window = gtk_builder_get_object (builder, "window");
     gtk_window_set_application (GTK_WINDOW (window), app);
 
+    /////// grid
+    //GtkWidget *grid;
+    //grid = GTK_WIDGET (gtk_builder_get_object (builder, "grid_main"));
+    //gtk_widget_set_hexpand(grid, TRUE);
+    //gtk_widget_set_halign(grid, GTK_ALIGN_FILL);
+
+    /////* menu bar */
+    //GMenuModel *menubar = G_MENU_MODEL (gtk_builder_get_object (builder, "menubar"));
+    //gtk_application_set_menubar (GTK_APPLICATION (app), G_MENU_MODEL (menubar));
+
+    /* buttons with unmutable labels */
     GObject *button;
 
     button = gtk_builder_get_object (builder, "button_mode_random");
@@ -222,23 +252,33 @@ static void activate (GtkApplication *app, gpointer user_data) {
     button = gtk_builder_get_object (builder, "button_mode_sequential");
     g_signal_connect (button, "clicked", G_CALLBACK (GUI_set_mode_sequential), NULL);
 
-    button = gtk_builder_get_object (builder, "button_scan_start");
-    g_signal_connect (button, "clicked", G_CALLBACK (scan_start), NULL);
-    
-    button = gtk_builder_get_object (builder, "button_scan_stop");
-    g_signal_connect (button, "clicked", G_CALLBACK (scan_stop), NULL);
+    //button = gtk_builder_get_object (builder, "button_scan_start");
+    //g_signal_connect (button, "clicked", G_CALLBACK (scan_start), NULL);
+    //
+    //button = gtk_builder_get_object (builder, "button_scan_stop");
+    //g_signal_connect (button, "clicked", G_CALLBACK (scan_stop), NULL);
 
-    button = gtk_builder_get_object (builder, "quit");
-    g_signal_connect_swapped (button, "clicked", G_CALLBACK (GUI_quit_smac), window);
+    /* buttons with mutable labels */
+    scan_button = gtk_builder_get_object (builder, "button_scan_toggle");
+    g_signal_connect (scan_button, "clicked", G_CALLBACK (GUI_scan_button_toggle), NULL);
+
+    //button = gtk_builder_get_object (builder, "quit");
+    //g_signal_connect_swapped (button, "clicked", G_CALLBACK (GUI_quit_smac), window);
 
     gtk_widget_set_visible (GTK_WIDGET (window), TRUE);
     
     current_mac_label = gtk_builder_get_object(builder, "mac_current_label");
     //gtk_label_set_text (GTK_LABEL(current_mac_label), "Hello World!");
-    
+
+    /////* list box*/
     accounts_listbox = gtk_builder_get_object(builder, "accounts_listbox");
+    gtk_widget_set_hexpand(GTK_WIDGET (accounts_listbox), TRUE);
+    //gtk_widget_set_halign(GTK_WIDGET (accounts_listbox), TRUE);
 
     server_url_entry = gtk_builder_get_object(builder, "server_url_entry");
     /* We do not need the builder any more */
     g_object_unref (builder);
+
+
+
 }

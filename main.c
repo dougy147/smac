@@ -19,7 +19,11 @@
 #include "src/shared.h"
 #include "src/gui.h"
 
-#define DEBUG 0
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
+#define DEBUG 1
 
 #define MAX_URL_LEN       512
 #define MAX_SN_LEN        64
@@ -52,7 +56,7 @@ char token[MAX_TOKEN_LEN]       = {0};
 FILE *mac_file = {0};
 char *mac_file_path = {0};
 
-float request_delay = 0.1 * 1000 * 1000; //µsecond
+float request_delay = 0 * 1000 * 1000; //µsecond
 
 char *prog_name = {0};
 
@@ -67,7 +71,10 @@ char *prog_name = {0};
     request_headers = NULL;
 
 #define reset_exp_date() \
-    exp_date[0] = '\0'
+    for (int i=0;i<MAX_EXP_DATE_LEN;i++) exp_date[0] = '\0';
+
+#define reset_response() \
+    for (int i=0;i<MAX_RESPONSE_LEN;i++) response[0] = '\0';
 
 #define request(DNS, PATH, ...)\
     make_url(tmp_url, "%s" PATH,(DNS),__VA_ARGS__);\
@@ -99,6 +106,8 @@ void make_request(char *url, struct curl_slist *headers)
 {
 
     CURL *curl = curl_easy_init();
+    if (!curl) return;
+    reset_response();
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -108,7 +117,7 @@ void make_request(char *url, struct curl_slist *headers)
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)4);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)10); // sec
     
-    curl_easy_perform(curl);
+    CURLcode response_code = curl_easy_perform(curl);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 }
@@ -192,7 +201,7 @@ void encode_mac(char *mac) {
     }
     encoded_mac[encoded_mac_len] = '\0';
     //printf("encoded_mac = %s\n", encoded_mac);
-    }
+}
 
 void make_headers() {
     // append headers to request
@@ -313,6 +322,7 @@ bool get_token() {
 }
 
 bool get_exp_date() {
+    reset_exp_date(); // needed if curl goes faster than us
     request(server_url,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
 
     char *i = &(response[0]);
@@ -324,13 +334,23 @@ bool get_exp_date() {
             while(i[0] == ' ' || i[0] == ':') i++;
             if (i[0] != '"') break;
             i++;
-            while(i[0] != '"') exp_date[exp_date_len++] = i++[0];
+            while(i[0] != '"') { 
+                /* sometimes random bytes are inserted in responses? */
+                /* they usually are between two '\r\n', so... skip'em */
+                if (i[0] == '\r' && i[1] == '\n') {
+                    i+=2;
+                    while (i[0] != '\r' && i[1] != '\n') i++;
+                    i+=2;
+                    continue;
+                }
+                exp_date[exp_date_len++] = i++[0];
+            }
             break;
         }
         i++;
     }
     exp_date[exp_date_len] = '\0';
-    //printf("parsed_expiration_date = %s\n", exp_date);
+    //printf("parsed_expiration_date = <%s>\n", exp_date);
     if (strlen(exp_date) == 0) return false;
     return true;
 }
@@ -359,7 +379,6 @@ void *scan(void *a) {
 #endif
         if (is_valid_account()) {
             GUI_add_to_accounts_listbox();
-            reset_exp_date(); // needed if curl goes faster than us
 #if DEBUG
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", MAC_SCANNED_COUNT, mac, exp_date);
 #endif
@@ -394,6 +413,12 @@ void scan_stop() {
 }
 
 int main(int argc, char **argv) {
+
+#ifdef _WIN32
+    // Hide useless widnows console
+    HWND console = GetConsoleWindow();
+    ShowWindow(console, SW_HIDE);
+#endif
 
     srand(time(NULL));
 

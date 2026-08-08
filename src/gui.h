@@ -16,11 +16,11 @@ static void GUI_quit_smac (GtkWindow *window) {
 }
 
 static void GUI_reset_mac_label() {
-    gtk_label_set_text (GTK_LABEL(current_mac_label), "");
+    gtk_label_set_text (GTK_LABEL(current_mac_label), NULL);
 }
 
 static void GUI_update_mac_label() {
-    const char *format = "[%d] Checking: <b><span foreground=\"darkgrey\">\%s</span></b>";
+    const char *format = "[%d] <b><span foreground=\"darkgrey\">\%s</span></b>";
     char *markup;
     markup = g_markup_printf_escaped (format, MAC_SCANNED_COUNT, mac);
     gtk_label_set_markup (GTK_LABEL(current_mac_label), markup);
@@ -274,7 +274,5 @@ static void activate (GtkApplication *app, gpointer user_data) {
     server_url_entry = gtk_builder_get_object(builder, "server_url_entry");
     /* We do not need the builder any more */
     g_object_unref (builder);
-
-
 
 }

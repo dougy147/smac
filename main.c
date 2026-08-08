@@ -1,7 +1,7 @@
 /*--------------------------------------------------------------*
  | Source code        : https://github.com/dougy147/smac    |
  | Originally written : 2026.07.31 (YYYY.MM.DD)                 |
- | Last updated       : 2026.08.02                              |
+ | Last updated       : 2026.08.07                              |
  | Licence            : BSD                                     |
  *--------------------------------------------------------------*
  | Inspired from mcbash (https://github.com/dougy147/mcbash)    |
@@ -12,13 +12,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 
 #include <curl/curl.h>
-//#if defined(__MINGW64__)
-//    #include "./3rd/curl-8.21.0_6-win64-mingw/include/curl/curl.h"
-//#else
-//    #include "./3rd/curl-8.21.0/include/curl/curl.h"
-//#endif
 
 #define DEBUG 0
 
@@ -31,6 +27,10 @@
 #define MAX_RESPONSE_LEN  8192
 #define MAX_HEADERS_LEN   1024
 
+#define FULL_MAC_STR_LEN (2 * 6) + 5 + 1
+
+bool GRACEFUL_EXIT_ASKED = false;
+
 char tmp_url[MAX_URL_LEN]         = {0};
 char tmp_headers[MAX_HEADERS_LEN] = {0};
 char response[MAX_RESPONSE_LEN]   = {0};
@@ -38,12 +38,12 @@ char response[MAX_RESPONSE_LEN]   = {0};
 struct curl_slist *request_headers = {0};
 
 char server_url[MAX_DNS_LEN] = {0};
-char mac[12+5+1]             = {0}; // 00:AA:11:BB:22:CC\0
+char mac[FULL_MAC_STR_LEN]   = {0}; // 00:AA:11:BB:22:CC\0
 char encoded_mac[12+5*3+1]   = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
 char sn[MAX_SN_LEN]          = {0};
 char dev_id[MAX_DEV_ID_LEN]  = {0};
 
-char mac_prefix[12+5+1] = "00:1A:79";
+char mac_prefix[FULL_MAC_STR_LEN] = "00:1A:79";
 
 const char *ua       = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3";
 const char *x_ua     = "Model: MAG250; Link: WiFi";
@@ -54,12 +54,13 @@ char token[MAX_TOKEN_LEN]       = {0};
 char exp_date[MAX_EXP_DATE_LEN] = {0};
 
 enum {
+    UNSET,
     SEQUENTIAL,
     RANDOM,
     MAC_FILE,
 } Scan_Mode;
 
-int scan_mode = RANDOM;
+int SCAN_MODE = SEQUENTIAL;
     
 FILE *mac_file = {0};
 char *mac_file_path = {0};
@@ -68,18 +69,14 @@ float request_delay = 0.1 * 1000 * 1000; //µsecond
 
 char *prog_name = {0};
 
-#define MAX_ACCOUNTS 4096 // TODO: dynamic array
-
-typedef struct {
-    char mac[12+5+1];
-    char exp[MAX_EXP_DATE_LEN];
-} Account;
-
-static int FOUND_ACCOUNTS = 0;
-Account accounts[MAX_ACCOUNTS] = {0};
-
 #define set_server_url(DNS) \
-    strcpy(server_url,(DNS));
+    int i = 0; \
+    int j = strlen((DNS)); \
+    for (;i<strlen((DNS));i++) if ((DNS)[i] != ' ') break; \
+    for (;j>0;j--) if ((DNS)[j-1] != ' ') break; \
+    char trimmed[MAX_DNS_LEN] = {0};\
+    for (int k=i;k<j;k++) trimmed[strlen(trimmed)] = (DNS)[k]; \
+    strcpy(server_url,trimmed);
 
 #define set_mac(MAC) \
     strcpy(mac,(MAC));\
@@ -114,12 +111,6 @@ Account accounts[MAX_ACCOUNTS] = {0};
 
 #define arg_match(str)\
     (strcmp(*argv,(str)) == 0)
-
-#define add_to_accounts() \
-    Account tmp_account = {0}; \
-    strcpy(tmp_account.mac, mac); \
-    strcpy(tmp_account.exp, exp_date); \
-    accounts[FOUND_ACCOUNTS++] = tmp_account; \
 
 /* Curl configuration */
 size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr) {
@@ -158,21 +149,27 @@ void parse_args(int argc, char **argv) {
     while (*argv != NULL) {
         if (arg_match("--help") || arg_match("-h")) {
             usage(0);
-        } else if (arg_match("--url") || arg_match("-u")) {
+        } else 
+        if (arg_match("--url") || arg_match("-u")) {
             shift(argv);
             set_server_url(*argv);
-        } else if (arg_match("--seq")) {
-            scan_mode = SEQUENTIAL;
-        } else if (arg_match("--random")) {
-            scan_mode = RANDOM;
-        } else if (arg_match("--mac-file")) {
-            scan_mode = MAC_FILE;
+        } else 
+        if (arg_match("--seq")) {
+            SCAN_MODE = SEQUENTIAL;
+        } else 
+        if (arg_match("--random")) {
+            SCAN_MODE = RANDOM;
+        } else
+        if (arg_match("--mac-file")) {
+            SCAN_MODE = MAC_FILE;
             shift(argv);
             mac_file_path = *argv;
-        } else if (arg_match("--mac-prefix")) {
+        } else 
+        if (arg_match("--mac-prefix")) {
             shift(argv);
             strcpy(mac_prefix,*argv);
-        } else if (arg_match("--delay") || arg_match("-d")) {
+        } else 
+        if (arg_match("--delay") || arg_match("-d")) {
             shift(argv);
             request_delay = atof(*argv) * 1000 * 1000; // in µsec for usleep
         }
@@ -252,7 +249,7 @@ bool next_mac_sequential() {
     long long mac_as_long_long = strtoll(mac_no_colon,NULL,16);
     long long next_mac_as_long_long = (mac_as_long_long + 1) % power(16,12);
     
-    char next_mac[12+5+1] = {0};
+    char next_mac[FULL_MAC_STR_LEN] = {0};
     long_long_to_mac_string(next_mac,next_mac_as_long_long);
     set_mac(next_mac);
     return true;
@@ -271,7 +268,7 @@ bool next_mac_random() {
     for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
     long long mac_prefix_as_long_long = strtoll(mac_prefix_no_colon,NULL,16);
  
-    char random_mac[12+5+1] = {0};
+    char random_mac[FULL_MAC_STR_LEN] = {0};
 
     long long random_part = 0;
     for (int i=1;i<=bytes_to_fill;i++) {
@@ -298,7 +295,7 @@ bool next_mac_random() {
 }
 
 bool next_mac_mac_file() {
-    char next_mac_in_file[12+5+1] = {0};
+    char next_mac_in_file[FULL_MAC_STR_LEN] = {0};
     char c;
     while (true) {
         if ((c = fgetc(mac_file)) == EOF) {
@@ -317,20 +314,11 @@ bool next_mac_mac_file() {
 }
 
 bool next_mac() {
-    switch (scan_mode) {
-        case SEQUENTIAL:
-            return next_mac_sequential();
-            break;
-        case RANDOM:
-            return next_mac_random();
-            break;
-        case MAC_FILE:
-            return next_mac_mac_file();
-            break;
-        default:
-            fprintf(stderr,"[!] Unknown mode");
-            exit(1);
-    }
+    if (SCAN_MODE == SEQUENTIAL) return next_mac_sequential();
+    if (SCAN_MODE == RANDOM)     return next_mac_random();
+    if (SCAN_MODE == MAC_FILE)   return next_mac_mac_file();
+    fprintf(stderr,"[!] Unknown mode");
+    return false;
 }
 
 bool get_token() {
@@ -375,23 +363,85 @@ bool is_valid_account() {
     return get_exp_date();
 }
 
+/* TODO: predeclare everything in some .h file */
+static void update_mac_label(void);
+static void add_to_accounts_listbox(void);
+static void set_server_url_from_entry(void);
+static void display_error_on_mac_label(char*);
+/* END TODO */
+
+pthread_t SCAN_THREAD;
+
+void *scan(void *a) {
+
+    set_server_url_from_entry();
+    printf("Setting URL: <%s>\n",server_url);
+    if (strlen(server_url) == 0) { // TODO: is_invalid(server_url);
+        display_error_on_mac_label("Please provide a valid URL");
+        SCAN_THREAD = 0;
+        return NULL;
+    }
+
+    int mac_count = 0;
+
+    while (!GRACEFUL_EXIT_ASKED) {
+        mac_count++;
+#ifdef DEBUG
+        printf("[%d] <%s>\n", mac_count, mac);
+        erase_previous_line();
+#endif
+        if (is_valid_account()) {
+            add_to_accounts_listbox();
+#ifdef DEBUG
+            printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
+#endif
+        }
+        if (!next_mac()) break;
+        update_mac_label(); // interface
+        usleep(request_delay);
+    }
+
+    GRACEFUL_EXIT_ASKED = false;
+}
+
+void scan_start() {
+    printf("SCAN_THREAD = %d\n", SCAN_THREAD);
+    if (SCAN_THREAD > 0) return;
+    // this is called in place of "scan()" 
+    // for instantiating the thread
+    pthread_create(&SCAN_THREAD, NULL, scan, NULL);
+}
+
+void scan_stop() {
+    GRACEFUL_EXIT_ASKED = true; // cf below
+    if (SCAN_THREAD > 0) pthread_cancel(SCAN_THREAD); // does nothing on Windows
+    SCAN_THREAD = 0;
+#ifndef _WIN32
+    // ignore this if compiling for windows
+    // race condition => thread might never update GRACEFUL_EXIT_ASKED
+    GRACEFUL_EXIT_ASKED = false;
+#endif
+}
+
+#include "src/gui.h"
+
 int main(int argc, char **argv) {
 
     srand(time(NULL));
 
-    set_server_url("http://localhost:8008/c/");
-    set_mac("00:1A:79:00:00:00");
+    //set_server_url("http://localhost:8008/c/");
+    //set_mac("00:1A:79:00:00:00");
     //set_mac("00:AA:11:BB:22:CC"); //97
 
     parse_args(argc, argv);
-    //check_options();
+    //check_options(); // TODO
+    if (SCAN_MODE == SEQUENTIAL && strlen(mac) == 0) 
+        set_mac("00:1A:79:00:00:00");
 
-    int mac_count = 0;
-
-    //scan_mode = MAC_FILE; // tmp 
+    //SCAN_MODE = MAC_FILE; // tmp 
     //mac_file_path = "./macs.txt"; // tmp
 
-    if (scan_mode == MAC_FILE) {
+    if (SCAN_MODE == MAC_FILE) {
         // we have to open provided macfile
         if (!(mac_file = fopen(mac_file_path,"r"))) {
             fprintf(stderr, "[!] Could not open file \"%s\"\n", mac_file_path);
@@ -399,17 +449,12 @@ int main(int argc, char **argv) {
         }
     }
 
-    while (true) {
-        mac_count++;
-        printf("[%d] <%s>\n", mac_count, mac);
-        erase_previous_line();
-        if (is_valid_account()) {
-            add_to_accounts();
-            printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
-        }
-        if (!next_mac()) break;
-        usleep(request_delay);
-    }
+    /* launch the interface */
+    GtkApplication *app = gtk_application_new ("org.gtk.example", G_APPLICATION_DEFAULT_FLAGS);
+    g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
+
+    int status = g_application_run (G_APPLICATION (app), argc, argv);
+    g_object_unref (app);
 
     return 0;
 }

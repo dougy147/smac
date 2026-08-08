@@ -1,5 +1,8 @@
 all: prepare main-linux main-windows
 
+linux: main.c
+	cc $$(pkg-config --cflags gtk4) -o ./build/smac-linux main.c -I./3rd/curl-8.21.0/include 3rd/curl-8.21.0/lib/.libs/libcurl.a -lz -lcrypto -lssl -ldl -lpthread -lbrotlidec -lzstd -lnghttp2 -lpsl -lidn2 -lcares -DCURL_STATICLIB $$(pkg-config --libs gtk4)
+
 main-linux: main.c
 	cc -o ./build/main-linux main.c -I./3rd/curl-8.21.0/include 3rd/curl-8.21.0/lib/.libs/libcurl.a -lz -lcrypto -lssl -ldl -lpthread -lbrotlidec -lzstd -lnghttp2 -lpsl -lidn2 -lcares -DCURL_STATICLIB
 

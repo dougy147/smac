@@ -1,6 +1,8 @@
 /* declarations of shared functions, macros, variables between main.c and src/gui.h */
 
-#define FULL_MAC_STR_LEN (2 * 6) + 5 + 1
+#define MAC_LEN (2 * 6)
+#define FULL_MAC_STR_LEN MAC_LEN + 5 + 1
+#define FULL_ENCODED_MAC_STR_LEN MAC_LEN + (5 * 3) + 1
 #define MAX_DNS_LEN       512
 #define MAX_EXP_DATE_LEN  128
 

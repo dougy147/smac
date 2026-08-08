@@ -36,7 +36,7 @@ char response[MAX_RESPONSE_LEN]   = {0};
 
 struct curl_slist *request_headers = {0};
 
-char encoded_mac[12+5*3+1]   = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
+char encoded_mac[FULL_ENCODED_MAC_STR_LEN] = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
 char sn[MAX_SN_LEN]          = {0};
 char dev_id[MAX_DEV_ID_LEN]  = {0};
 
@@ -65,6 +65,9 @@ char *prog_name = {0};
 
 #define reset_headers() \
     request_headers = NULL;
+
+#define reset_exp_date() \
+    exp_date[0] = '\0'
 
 #define request(DNS, PATH, ...)\
     make_url(tmp_url, "%s" PATH,(DNS),__VA_ARGS__);\
@@ -214,14 +217,14 @@ long long power(int n, unsigned int exp) {
 }
 
 bool next_mac_sequential() {
-    char mac_no_colon[12+1] = {0};
+    char mac_no_colon[MAC_LEN+1] = {0};
     for (int i = 0; i < strlen(mac); i++) {
         if (mac[i] != ':') mac_no_colon[strlen(mac_no_colon)] = mac[i];
     }
     mac_no_colon[strlen(mac_no_colon)] = '\0';
 
     long long mac_as_long_long = strtoll(mac_no_colon,NULL,16);
-    long long next_mac_as_long_long = (mac_as_long_long + 1) % power(16,12);
+    long long next_mac_as_long_long = (mac_as_long_long + 1) % power(16,MAC_LEN);
     
     char next_mac[FULL_MAC_STR_LEN] = {0};
     long_long_to_mac_string(next_mac,next_mac_as_long_long);
@@ -231,13 +234,13 @@ bool next_mac_sequential() {
 
 bool next_mac_random() {
     // handle prefix
-    char mac_prefix_no_colon[12+1] = {0};
+    char mac_prefix_no_colon[MAC_LEN+1] = {0};
     for (int i = 0; i < strlen(mac_prefix); i++) {
         if (mac_prefix[i] != ':') mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = mac_prefix[i];
     }
     mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '\0';
 
-    int bytes_to_fill = 12 - strlen(mac_prefix_no_colon);
+    int bytes_to_fill = MAC_LEN - strlen(mac_prefix_no_colon);
 
     for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
     long long mac_prefix_as_long_long = strtoll(mac_prefix_no_colon,NULL,16);
@@ -304,9 +307,9 @@ bool get_token() {
         request(server_url,"/portal.php?action=handshake&type=stb&token=&mac=%s",encoded_mac);
     }
 
-    fprintf(stderr, "[!] Could not get token");
-    exit(1);
-    //return false;
+    //TODO: better error parsing+info
+    //GUI_display_error("Could not get token");
+    return false;
 }
 
 bool get_exp_date() {
@@ -350,13 +353,14 @@ void *scan(void *a) {
 
     while (!GRACEFUL_EXIT_ASKED) {
         MAC_SCANNED_COUNT++;
-#ifdef DEBUG
+#if DEBUG
         printf("[%d] <%s>\n", MAC_SCANNED_COUNT, mac);
         erase_previous_line();
 #endif
         if (is_valid_account()) {
             GUI_add_to_accounts_listbox();
-#ifdef DEBUG
+            reset_exp_date(); // needed if curl goes faster than us
+#if DEBUG
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", MAC_SCANNED_COUNT, mac, exp_date);
 #endif
         }

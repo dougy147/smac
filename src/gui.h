@@ -1,8 +1,6 @@
 #include <gtk/gtk.h>
 #include <glib/gstdio.h>
 
-// NOTE: prepend INTERFACE_ to every functions?
-    
 /* Construct a GtkBuilder instance and load our UI description */
 GtkBuilder *builder; // = gtk_builder_new ();
 
@@ -15,20 +13,20 @@ GObject *server_url_entry;
 //    g_print ("Hello World\n");
 //}
 
-static void quit_smac (GtkWindow *window) {
+static void GUI_quit_smac (GtkWindow *window) {
     if (SCAN_THREAD > 0) scan_stop();
     gtk_window_close (window);
 }
 
-static void update_mac_label() {
+static void GUI_update_mac_label() {
     gtk_label_set_text (GTK_LABEL(current_mac_label), mac);
 }
 
-static void display_error_on_mac_label(char *err_msg) {
+static void GUI_display_error_on_mac_label(char *err_msg) {
     gtk_label_set_text (GTK_LABEL(current_mac_label), err_msg);
 }
 
-static void add_to_accounts_listbox() {
+static void GUI_add_to_accounts_listbox() {
 
     char account_str[FULL_MAC_STR_LEN+MAX_EXP_DATE_LEN+1] = {0};
 
@@ -47,7 +45,7 @@ static void add_to_accounts_listbox() {
     gtk_list_box_insert(GTK_LIST_BOX(accounts_listbox),account_label,-1); // -1 => end of list
 }
 
-static void set_server_url_from_entry() {
+static void GUI_set_server_url_from_entry() {
     const char *user_server_url[MAX_DNS_LEN] = {0};
     *user_server_url = gtk_editable_get_text (GTK_EDITABLE (server_url_entry));
     //printf("User server url = <%s>\n", *user_server_url);
@@ -62,11 +60,11 @@ static void set_server_url_from_entry() {
 //    SCAN_MODE = mode;
 //}
 
-static void set_mode_random() {
+static void GUI_set_mode_random() {
     SCAN_MODE = RANDOM;
 }
 
-static void set_mode_sequential() {
+static void GUI_set_mode_sequential() {
     SCAN_MODE = SEQUENTIAL;
 }
 
@@ -205,9 +203,8 @@ const char *ui_builder_string = \
 "        </child>"
 "    </object>"
 "</interface>";
-                                ;
 
-static void activate (GtkApplication *app, gpointer        user_data) {
+static void activate (GtkApplication *app, gpointer user_data) {
     
     builder = gtk_builder_new ();
     //gtk_builder_add_from_file (builder, "builder.ui", NULL);
@@ -220,10 +217,10 @@ static void activate (GtkApplication *app, gpointer        user_data) {
     GObject *button;
 
     button = gtk_builder_get_object (builder, "button_mode_random");
-    g_signal_connect (button, "clicked", G_CALLBACK (set_mode_random), NULL);
+    g_signal_connect (button, "clicked", G_CALLBACK (GUI_set_mode_random), NULL);
     
     button = gtk_builder_get_object (builder, "button_mode_sequential");
-    g_signal_connect (button, "clicked", G_CALLBACK (set_mode_sequential), NULL);
+    g_signal_connect (button, "clicked", G_CALLBACK (GUI_set_mode_sequential), NULL);
 
     button = gtk_builder_get_object (builder, "button_scan_start");
     g_signal_connect (button, "clicked", G_CALLBACK (scan_start), NULL);
@@ -232,7 +229,7 @@ static void activate (GtkApplication *app, gpointer        user_data) {
     g_signal_connect (button, "clicked", G_CALLBACK (scan_stop), NULL);
 
     button = gtk_builder_get_object (builder, "quit");
-    g_signal_connect_swapped (button, "clicked", G_CALLBACK (quit_smac), window);
+    g_signal_connect_swapped (button, "clicked", G_CALLBACK (GUI_quit_smac), window);
 
     gtk_widget_set_visible (GTK_WIDGET (window), TRUE);
     

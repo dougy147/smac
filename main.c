@@ -364,20 +364,20 @@ bool is_valid_account() {
 }
 
 /* TODO: predeclare everything in some .h file */
-static void update_mac_label(void);
-static void add_to_accounts_listbox(void);
-static void set_server_url_from_entry(void);
-static void display_error_on_mac_label(char*);
+static void GUI_update_mac_label(void);
+static void GUI_add_to_accounts_listbox(void);
+static void GUI_set_server_url_from_entry(void);
+static void GUI_display_error_on_mac_label(char*);
 /* END TODO */
 
 pthread_t SCAN_THREAD;
 
 void *scan(void *a) {
 
-    set_server_url_from_entry();
+    GUI_set_server_url_from_entry();
     printf("Setting URL: <%s>\n",server_url);
     if (strlen(server_url) == 0) { // TODO: is_invalid(server_url);
-        display_error_on_mac_label("Please provide a valid URL");
+        GUI_display_error_on_mac_label("Please provide a valid URL");
         SCAN_THREAD = 0;
         return NULL;
     }
@@ -391,13 +391,13 @@ void *scan(void *a) {
         erase_previous_line();
 #endif
         if (is_valid_account()) {
-            add_to_accounts_listbox();
+            GUI_add_to_accounts_listbox();
 #ifdef DEBUG
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", mac_count, mac, exp_date);
 #endif
         }
         if (!next_mac()) break;
-        update_mac_label(); // interface
+        GUI_update_mac_label(); // interface
         usleep(request_delay);
     }
 

@@ -1,5 +1,5 @@
 #include <gtk/gtk.h>
-#include <glib/gstdio.h>
+//#include <glib/gstdio.h>
 
 /* Construct a GtkBuilder instance and load our UI description */
 GtkBuilder *builder; // = gtk_builder_new ();

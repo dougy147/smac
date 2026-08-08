@@ -1,7 +1,7 @@
 /*--------------------------------------------------------------*
  | Source code        : https://github.com/dougy147/smac    |
  | Originally written : 2026.07.31 (YYYY.MM.DD)                 |
- | Last updated       : 2026.08.07                              |
+ | Last updated       : 2026.08.08                              |
  | Licence            : BSD                                     |
  *--------------------------------------------------------------*
  | Inspired from mcbash (https://github.com/dougy147/mcbash)    |
@@ -16,18 +16,17 @@
 
 #include <curl/curl.h>
 
+#include "src/shared.h"
+#include "src/gui.h"
+
 #define DEBUG 0
 
-#define MAX_DNS_LEN       512
 #define MAX_URL_LEN       512
 #define MAX_SN_LEN        64
 #define MAX_DEV_ID_LEN    64
 #define MAX_TOKEN_LEN     128
-#define MAX_EXP_DATE_LEN  128
 #define MAX_RESPONSE_LEN  8192
 #define MAX_HEADERS_LEN   1024
-
-#define FULL_MAC_STR_LEN (2 * 6) + 5 + 1
 
 bool GRACEFUL_EXIT_ASKED = false;
 
@@ -37,8 +36,6 @@ char response[MAX_RESPONSE_LEN]   = {0};
 
 struct curl_slist *request_headers = {0};
 
-char server_url[MAX_DNS_LEN] = {0};
-char mac[FULL_MAC_STR_LEN]   = {0}; // 00:AA:11:BB:22:CC\0
 char encoded_mac[12+5*3+1]   = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
 char sn[MAX_SN_LEN]          = {0};
 char dev_id[MAX_DEV_ID_LEN]  = {0};
@@ -51,16 +48,6 @@ const char *stb_lang = "en";
 const char *tz       = "Europe/Amsterdam";
 
 char token[MAX_TOKEN_LEN]       = {0};
-char exp_date[MAX_EXP_DATE_LEN] = {0};
-
-enum {
-    UNSET,
-    SEQUENTIAL,
-    RANDOM,
-    MAC_FILE,
-} Scan_Mode;
-
-int SCAN_MODE = SEQUENTIAL;
     
 FILE *mac_file = {0};
 char *mac_file_path = {0};
@@ -68,19 +55,6 @@ char *mac_file_path = {0};
 float request_delay = 0.1 * 1000 * 1000; //µsecond
 
 char *prog_name = {0};
-
-#define set_server_url(DNS) \
-    int i = 0; \
-    int j = strlen((DNS)); \
-    for (;i<strlen((DNS));i++) if ((DNS)[i] != ' ') break; \
-    for (;j>0;j--) if ((DNS)[j-1] != ' ') break; \
-    char trimmed[MAX_DNS_LEN] = {0};\
-    for (int k=i;k<j;k++) trimmed[strlen(trimmed)] = (DNS)[k]; \
-    strcpy(server_url,trimmed);
-
-#define set_mac(MAC) \
-    strcpy(mac,(MAC));\
-    encode_mac((MAC));
 
 #define add_to_headers(str,...) \
     snprintf(tmp_headers, sizeof(tmp_headers),(str),__VA_ARGS__);\
@@ -363,15 +337,6 @@ bool is_valid_account() {
     return get_exp_date();
 }
 
-/* TODO: predeclare everything in some .h file */
-static void GUI_update_mac_label(void);
-static void GUI_add_to_accounts_listbox(void);
-static void GUI_set_server_url_from_entry(void);
-static void GUI_display_error_on_mac_label(char*);
-/* END TODO */
-
-pthread_t SCAN_THREAD;
-
 void *scan(void *a) {
 
     GUI_set_server_url_from_entry();
@@ -422,8 +387,6 @@ void scan_stop() {
     GRACEFUL_EXIT_ASKED = false;
 #endif
 }
-
-#include "src/gui.h"
 
 int main(int argc, char **argv) {
 

@@ -1,7 +1,7 @@
 /*--------------------------------------------------------------*
  | Source code        : https://github.com/dougy147/smac    |
  | Originally written : 2026.07.31 (YYYY.MM.DD)                 |
- | Last updated       : 2026.08.08                              |
+ | Last updated       : 2026.08.09 (YYYY.MM.DD)                 |
  | Licence            : BSD                                     |
  *--------------------------------------------------------------*
  | Inspired from mcbash (https://github.com/dougy147/mcbash)    |
@@ -23,7 +23,7 @@
     #include <windows.h>
 #endif
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define MAX_URL_LEN       512
 #define MAX_SN_LEN        64
@@ -40,6 +40,8 @@ char response[MAX_RESPONSE_LEN]   = {0};
 
 struct curl_slist *request_headers = {0};
 
+char server_url_previous[MAX_DNS_LEN] = {0}; // used to check if user changed it between scans
+char server_url_sanitized[MAX_DNS_LEN] = {0}; // used for results/{filename}.txt
 char encoded_mac[FULL_ENCODED_MAC_STR_LEN] = {0}; // 00:1A:79:XX:XX:XX => 00%3A1A%3A79%3AXX%3AXX%3AXX\0
 char sn[MAX_SN_LEN]          = {0};
 char dev_id[MAX_DEV_ID_LEN]  = {0};
@@ -59,6 +61,11 @@ char *mac_file_path = {0};
 float request_delay = 0 * 1000 * 1000; //µsecond
 
 char *prog_name = {0};
+
+CURL *curl = {0};
+
+FILE *results_file = {0}; // where to store results
+char results_filename[MAX_DNS_LEN] = {0};
 
 #define add_to_headers(str,...) \
     snprintf(tmp_headers, sizeof(tmp_headers),(str),__VA_ARGS__);\
@@ -81,6 +88,9 @@ char *prog_name = {0};
     reset_headers();\
     make_headers();\
     make_request(tmp_url,request_headers);
+
+#define set_results_filename()\
+    snprintf(results_filename, sizeof(results_filename),"results/%s.txt",server_url_sanitized);
 
 #define erase_previous_line()\
     printf("\r\033[1A"); 
@@ -105,9 +115,9 @@ size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr
 void make_request(char *url, struct curl_slist *headers)
 {
 
-    CURL *curl = curl_easy_init();
-    if (!curl) return;
     reset_response();
+    curl = curl_easy_init();
+    if (!curl) return;
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -160,6 +170,22 @@ void parse_args(int argc, char **argv) {
             request_delay = atof(*argv) * 1000 * 1000; // in µsec for usleep
         }
         shift(argv);
+    }
+}
+
+void sanitize_server_url() {
+    for (int i=0;i<MAX_DNS_LEN;i++) server_url_sanitized[i] = '\0';
+    char *p = &(server_url[0]);
+    const char *http = "http://";
+    const char *https = "https://";
+    if (strncmp(http,p,strlen(http)) == 0) p+=strlen(http);
+    if (strncmp(https,p,strlen(https)) == 0) p+=strlen(https);
+    char break_on[] = { '/', ' ', '\n', '\t' };
+    while (*p != '\0') {
+        for (int i=0; i<(sizeof(break_on)/sizeof(break_on[0]));i++) {
+            if (p[0] == break_on[i]) return;
+        }
+        server_url_sanitized[strlen(server_url_sanitized)] = p++[0];
     }
 }
 
@@ -350,8 +376,10 @@ bool get_exp_date() {
         i++;
     }
     exp_date[exp_date_len] = '\0';
-    //printf("parsed_expiration_date = <%s>\n", exp_date);
     if (strlen(exp_date) == 0) return false;
+#if DEBUG
+    printf("parsed_expiration_date = <%s>\n", exp_date);
+#endif
     return true;
 }
 
@@ -360,10 +388,42 @@ bool is_valid_account() {
     return get_exp_date();
 }
 
-void *scan(void *a) {
+void write_account_to_file() {
+    set_results_filename();
+    results_file = fopen(results_filename,"a");
+    if (VALID_ACCOUNTS_COUNT == 1) {
+        fprintf(results_file,"\n%s\n",server_url);
+    }
+    fprintf(results_file,"%s [%s]\n",mac,exp_date);
+    fclose(results_file);
+}
 
+void did_server_url_changed() {
+    if (strlen(server_url_previous) == 0) {
+        strcpy(server_url_previous,server_url);
+        return;
+    }
+    if (strcmp(server_url_previous,server_url) == 0) {
+        printf("they are the same");
+        return;
+    }
+    set_results_filename();
+    VALID_ACCOUNTS_COUNT = 0;
+    MAC_SCANNED_COUNT = 0;
+    set_mac("00:1A:79:00:00:00"); // TODO change this
+    GUI_clear_listbox();// remove all in listbox
+    strcpy(server_url_previous,server_url);
+}
+
+void *scan(void *a) {
     GUI_set_server_url_from_entry();
+    sanitize_server_url();
+    did_server_url_changed();
+
+#if DEBUG
     printf("Setting URL: <%s>\n",server_url);
+    printf("Sanitized URL: %s\n", server_url_sanitized);
+#endif
     if (strlen(server_url) == 0) { // TODO: is_invalid(server_url);
         GUI_display_error("Please provide a valid URL");
         SCAN_THREAD = 0;
@@ -379,6 +439,8 @@ void *scan(void *a) {
 #endif
         if (is_valid_account()) {
             GUI_add_to_accounts_listbox();
+            VALID_ACCOUNTS_COUNT++;
+            write_account_to_file();
 #if DEBUG
             printf("[%d] \033[1;32m%s\033[0m [%s]\n", MAC_SCANNED_COUNT, mac, exp_date);
 #endif
@@ -389,6 +451,7 @@ void *scan(void *a) {
     }
 
     GRACEFUL_EXIT_ASKED = false;
+    return NULL;
 }
 
 void scan_start() {
@@ -409,7 +472,7 @@ void scan_stop() {
     GRACEFUL_EXIT_ASKED = false;
 #endif
     GUI_reset_mac_label();
-    MAC_SCANNED_COUNT = 0;
+    //MAC_SCANNED_COUNT = 0;
 }
 
 int main(int argc, char **argv) {
@@ -421,15 +484,15 @@ int main(int argc, char **argv) {
 #endif
 
     srand(time(NULL));
-
-    //set_server_url("http://localhost:8008/c/");
-    //set_mac("00:1A:79:00:00:00");
-    //set_mac("00:AA:11:BB:22:CC"); //97
+    curl_global_init(CURL_GLOBAL_ALL);
 
     parse_args(argc, argv);
     //check_options(); // TODO
     if (SCAN_MODE == SEQUENTIAL && strlen(mac) == 0) 
         set_mac("00:1A:79:00:00:00");
+
+    //create the "results" directory if does not exist
+    system("mkdir results");
 
     //SCAN_MODE = MAC_FILE; // tmp 
     //mac_file_path = "./macs.txt"; // tmp

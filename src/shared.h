@@ -21,6 +21,7 @@ enum {
 
 int SCAN_MODE = SEQUENTIAL;
 int MAC_SCANNED_COUNT = 0;
+int VALID_ACCOUNTS_COUNT = 0;
 
 #define set_server_url(DNS) \
     int i = 0; \

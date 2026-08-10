@@ -110,6 +110,7 @@ char results_filename[MAX_DNS_LEN] = {0};
 size_t static write_callback (void *buffer, size_t size, size_t nmemb, void *ptr) {
     // https://stackoverflow.com/questions/2577654/curl-put-output-into-variable
     strcpy(response,buffer); // this is to save curl response into a variable
+    return strlen(response); //https://curl.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
 }
 
 void make_request(char *url, struct curl_slist *headers)

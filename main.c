@@ -64,7 +64,7 @@ char *prog_name = {0};
 
 CURL *curl = {0};
 
-FILE *results_file = {0}; // where to store results
+FILE *results_file = {0}; // where to store accoutns
 char results_filename[MAX_DNS_LEN] = {0};
 
 #define add_to_headers(str,...) \
@@ -465,6 +465,7 @@ void scan_start() {
 void scan_stop() {
     GRACEFUL_EXIT_ASKED = true; // cf below
     if (SCAN_THREAD > 0) pthread_cancel(SCAN_THREAD); // does nothing on Windows
+    pthread_join(SCAN_THREAD, NULL); //// wait for thread to finish
     SCAN_THREAD = 0;
 #ifndef _WIN32
     // ignore this if compiling for windows

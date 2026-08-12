@@ -23,7 +23,7 @@
     #include <windows.h>
 #endif
 
-#define DEBUG 0
+#define DEBUG 1
 
 #define MAX_URL_LEN       512
 #define MAX_SN_LEN        64
@@ -192,10 +192,16 @@ void sanitize_server_url() {
 
 /* smac */
 bool grab_token() {
+    int nest = 0;
     char *i = &(response[0]);
     int token_len = 0;
     const char *pattern = "\"token\"";
     while (*i != '\0') {
+        if (i[0] == '{') nest++; // kinda json parser of the poor :')
+        if (i[0] == '}') nest--; // kinda json parser of the poor :')
+        if (nest == 0) {
+            return false;
+        }
         if (strncmp(pattern,i,strlen(pattern)) == 0) {
             i+=strlen(pattern);
             while(i[0] == ' ' || i[0] == ':') i++;
@@ -352,10 +358,16 @@ bool get_exp_date() {
     reset_exp_date(); // needed if curl goes faster than us
     request(server_url,"/portal.php?type=account_info&action=get_main_info&mac=%s",mac);
 
+    int nest = 0;
     char *i = &(response[0]);
     int exp_date_len = 0;
     const char *pattern = "\"phone\"";
     while (*i != '\0') {
+        if (i[0] == '{') nest++; // kinda json parser of the poor :')
+        if (i[0] == '}') nest--; // kinda json parser of the poor :')
+        if (nest == 0) {
+            return false;
+        }
         if (strncmp(pattern,i,strlen(pattern)) == 0) {
             i+=strlen(pattern);
             while(i[0] == ' ' || i[0] == ':') i++;
@@ -437,6 +449,7 @@ void *scan(void *a) {
 #if DEBUG
         printf("[%d] <%s>\n", MAC_SCANNED_COUNT, mac);
         erase_previous_line();
+        //printf("\n---------------------\nRESPONSE: %s\n------------------\n",response);
 #endif
         if (is_valid_account()) {
             GUI_add_to_accounts_listbox();
@@ -492,6 +505,7 @@ int main(int argc, char **argv) {
     //check_options(); // TODO
     if (SCAN_MODE == SEQUENTIAL && strlen(mac) == 0) 
         set_mac("00:1A:79:00:00:00");
+        //set_mac("00:AA:11:BB:22:CC");
 
     //create the "results" directory if does not exist
     system("mkdir results");

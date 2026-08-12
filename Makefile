@@ -23,11 +23,17 @@ windows-mingw64: prepare main.cpp CMakeLists.txt
 	mv ./build/$(EXE_WINDOWS) ./release/windows/src/
 	mv ./build/*.dll ./release/windows/src/
 	cp interface.ui ./release/windows/src/ 2>/dev/null
+	cp icon.ico ./release/windows/src/
 	cp ./tools/create_relative_shortcut.bat ./release/windows/
 	cd ./release/windows/ && \
 		./create_relative_shortcut.bat
 	rm ./release/windows/create_relative_shortcut.bat
 
+windows-sendbuild:
+	rsync -hurtPl . win11:Desktop/main-sendbuild \
+		--exclude={.git*,3rd/curl-8.21.0{,*zip,*gz},release,build}
+
 prepare:
+	@rm -rf ./build 2>/dev/null
 	@mkdir -p ./build
 	@mkdir -p ./release/{linux,windows/{,src}}

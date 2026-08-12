@@ -1,5 +1,14 @@
 `smac` is a MAC accounts scanner for IPTV.
 
+I first started to write it with GTK library for GUI (check the branch `gtk` of this repository).
+Now I am experimenting with Qt.
+
+# NOTE
+
+If that does not work, ensure the current directory has a copy of "interface.ui". 
+This is while we read the interface from a file.
+Maybe someday we will cook it into the source code.
+
 
 # Compile from source
 

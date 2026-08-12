@@ -1,0 +1,261 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include <curl/curl.h>
+#include <pthread.h>
+
+#define MAX_RESPONSE_LEN 16 * 1024
+#define MAX_URL_LEN 2048
+#define MAX_HEADERS_LEN 2048
+
+#define STR_MAC_LEN (6*2) + 5 + 1
+
+#define NB_REQUESTS 500
+
+char host[MAX_URL_LEN] = "http://localhost:8008";
+char mac[STR_MAC_LEN]  = "00:1A:79:00:00:00";
+
+typedef struct {
+    int thread_index;
+    char *host;
+    char *mac;
+    int mac_index;
+} ThreadCheckArgs ;
+
+pthread_t threads[THREADS_LIMIT] = {0};
+ThreadCheckArgs threads_args[THREADS_LIMIT] = {0};
+
+char threads_macs[THREADS_LIMIT][12+5+1] = {0};
+
+int THREADS_COUNT = 0;
+
+char responses[THREADS_LIMIT][MAX_RESPONSE_LEN] = {0};
+
+const char *ua       = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3";
+const char *x_ua     = "Model: MAG250; Link: WiFi";
+const char *stb_lang = "en";
+const char *tz       = "Europe/Amsterdam";
+
+void encode_mac(char *encoded_mac, char *mac) {
+    int encoded_mac_len = 0;
+    while (mac[0] != '\0') {
+        switch (mac[0]) {
+            case ':':
+                encoded_mac[encoded_mac_len++] = '%';
+                encoded_mac[encoded_mac_len++] = '3';
+                encoded_mac[encoded_mac_len++] = 'A';
+                break;
+            default:
+                encoded_mac[encoded_mac_len++] = mac[0];
+        }
+        mac++;
+    }
+    encoded_mac[encoded_mac_len] = '\0';
+}
+
+#include "write_callback_declarations.h"
+
+void make_request(char *url, char *mac, struct curl_slist *headers, int thread_index) {
+    CURL *curl = curl_easy_init();
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+#include "write_callback_calls.h"
+    //curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    //printf("thread_index = %d\n",thread_index);
+    CURLcode res = curl_easy_perform(curl);
+    //printf("mac = %s ; index = %d ; response[] = <<<%s>>>\n", mac, thread_index,responses[thread_index]);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+}
+
+void parse_pattern(char *dst, char *pattern, char *response) {
+    int nest = 0;
+    char *s = response;
+    while (s[0] != '\0') {
+        if (s[0] == '{') nest++; // kinda json parser of the poor :')
+        if (s[0] == '}') nest--; // kinda json parser of the poor :')
+        if (nest == 0) {
+            return;
+        }
+        if (strncmp(pattern,s,strlen(pattern)) == 0) {
+            s+=strlen(pattern);
+            while (s[0] == ' ' || s[0] == ':' || s[0] == '"' || s[0] == '\n' || s[0] == '\r') {
+                if (s[0] == '\0') return;
+                s++;
+            }
+            while (s[0] != '"' && s[0] != '\0') {
+                if (s[0] != '\r' && s[0] != '\n') dst[strlen(dst)] = s++[0];
+                if (s[0] == '\r' && s[1] == '\n') {
+                    s+=2;
+                    while (s[0] != '\r' && s[1] != '\n') s++;
+                    s+=2;
+                    continue;
+                }
+            }
+            dst[strlen(dst)] = '\0';
+            return;
+        }
+        s++;
+    }
+}
+
+void handshake(char *token, char *url_path, char *host, char *mac, struct curl_slist *headers, int thread_index) {
+    char url[MAX_URL_LEN];
+    snprintf(url,sizeof(url),url_path,host,mac);
+    make_request(url,mac,headers,thread_index);
+    parse_pattern(token,(char *)"\"token\"",responses[thread_index]);
+}
+
+void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct curl_slist *headers, int thread_index) {
+    char url[MAX_URL_LEN];
+    snprintf(url,sizeof(url),url_path,host,mac);
+    make_request(url,mac,headers,thread_index);
+    parse_pattern(exp_date,(char *)"\"phone\"",responses[thread_index]);
+}
+
+//bool check(char *host, char *mac) {
+void *check(void *thread_args) {
+
+    ThreadCheckArgs args = *(ThreadCheckArgs*)thread_args;
+
+    // every variables are local
+    // EXCEPT "response"
+    char encoded_mac[12+5*3+1] = {0};
+    encode_mac(encoded_mac, args.mac);
+
+    //printf("mac = %s ; encoded = %s ; index = %d\n", args.mac, encoded_mac, args.thread_index);
+
+    char tmp_headers[MAX_HEADERS_LEN] = {0};
+    struct curl_slist *headers = {0};
+
+    // prepare for handshake
+    snprintf(tmp_headers, sizeof(tmp_headers),"Accept: */*", NULL);
+    snprintf(tmp_headers, sizeof(tmp_headers),"User-Agent: %s", ua);
+    snprintf(tmp_headers, sizeof(tmp_headers),"X-User-Agent: %s", x_ua);
+    snprintf(tmp_headers, sizeof(tmp_headers),"Cookie: mac=%s;stb_lang=%s;tz=%s;", args.mac,stb_lang,tz);
+    headers = curl_slist_append(headers,tmp_headers);
+
+    // handshake
+    char token[128] = {0};
+    handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, args.thread_index);
+
+    if (strlen(token) == 0) {
+        THREADS_COUNT--;
+        threads[args.thread_index] = 0;
+        pthread_exit(NULL);
+        return NULL;
+    }
+
+    // reset headers
+    for (int i=0;i<MAX_HEADERS_LEN;i++) tmp_headers[i] = '\0';
+    headers = NULL;
+
+    // prepare for account verif
+    snprintf(tmp_headers, sizeof(tmp_headers),"Accept: */*", NULL);
+    snprintf(tmp_headers, sizeof(tmp_headers),"User-Agent: %s", ua);
+    snprintf(tmp_headers, sizeof(tmp_headers),"X-User-Agent: %s", x_ua);
+    snprintf(tmp_headers, sizeof(tmp_headers),"Cookie: mac=%s;stb_lang=%s;tz=%s;", args.mac,stb_lang,tz);
+    snprintf(tmp_headers, sizeof(tmp_headers),"Authorization: Bearer %s", token);
+    headers = curl_slist_append(headers,tmp_headers);
+
+    // account verif
+    char exp_date[128] = {0};
+    get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,args.thread_index);
+   
+    if (strlen(exp_date) == 0) {
+        THREADS_COUNT--;
+        threads[args.thread_index] = 0;
+        pthread_exit(NULL);
+        return NULL;
+    }
+
+    //printf("exp_date: %s\n",exp_date);
+    printf("[%d] %s [%s]\n", args.mac_index, args.mac, exp_date);
+
+    THREADS_COUNT--;
+    threads[args.thread_index] = 0;
+    pthread_exit(NULL);
+    return NULL;
+}
+
+long long power(int n, unsigned int exp) {
+    long long res = 1;
+    while (exp > 0) {
+        res*=n;
+        exp--;
+    }
+    return res;
+}
+
+void compute_next_mac(char *next_mac, char *mac) {
+    char mac_no_colon[12+1] = {0};
+    for (int i = 0; i < strlen(mac); i++) {
+        if (mac[i] != ':') mac_no_colon[strlen(mac_no_colon)] = mac[i];
+    }
+    mac_no_colon[strlen(mac_no_colon)] = '\0';
+
+    long long mac_as_long_long = strtoll(mac_no_colon,NULL,16);
+    long long next_mac_as_long_long = (mac_as_long_long + 1) % power(16,12);
+
+    //char next_mac[FULL_MAC_STR_LEN] = {0};
+    sprintf(next_mac,"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
+        next_mac_as_long_long >> 40 & 0XFF, next_mac_as_long_long >> 32 & 0XFF, 
+        next_mac_as_long_long >> 24 & 0XFF, next_mac_as_long_long >> 16 & 0XFF, 
+        next_mac_as_long_long >> 8 & 0XFF,  next_mac_as_long_long >> 0 & 0XFF);  
+}
+
+void *start(void *_) {
+
+    for (int i=0;i<NB_REQUESTS;i++) {
+
+        printf("[%d] %s\n",i, mac);
+        //update label_mac
+
+        label_mac->setText(mac);
+
+        if (THREADS_COUNT >= NB_THREADS) {
+            //empty the queue
+            for (int j=0;j<NB_THREADS;j++) {
+                if (threads[j] == 0) continue;
+                int ok = pthread_join(threads[j],NULL);
+                if (ok == 0) threads[j] = 0;
+            }
+        }
+
+        // find an empty thread
+        bool found_place = false;
+        while (!found_place) {
+            for (int j=0;j<NB_THREADS;j++) {
+                if (threads[j] == 0) {
+                    threads_args[j].thread_index = j;
+                    threads_args[j].host = host;
+
+                    strcpy(threads_macs[j],mac);
+                    threads_args[j].mac = threads_macs[j];
+
+                    //threads_args[j].mac = next_mac();
+                    threads_args[j].mac_index = i;
+
+                    int ok = pthread_create(&threads[j], NULL, check, &threads_args[j]);
+                    if (ok == 0) {
+                        THREADS_COUNT++;
+                        found_place = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        char next_mac[12+5+1];;
+        compute_next_mac(next_mac,mac);
+        strcpy(mac,next_mac);
+    }
+
+    for (int i=0;i<NB_THREADS;i++) {
+        if (threads[i] != 0) pthread_join(threads[i],NULL);
+    }
+
+    //printf("finished");
+    return NULL;
+}

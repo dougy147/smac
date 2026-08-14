@@ -28,6 +28,11 @@ bool USE_CHECKPOINTS    = true;
 char output_filename_accounts[MAX_URL_LEN+4] = {0};
 char output_filename_checkpoints[MAX_URL_LEN+4] = {0};
 
+int request_delay = 0;
+int request_timeout = 2 * 1000;
+int pause_nb = 0;
+int pause_duration = 10 * 1000;
+
 
 enum {
     SEQUENTIAL,

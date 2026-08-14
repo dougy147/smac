@@ -91,15 +91,13 @@ void encode_mac(char *encoded_mac, char *mac) {
 void make_request(char *url, char *mac, struct curl_slist *headers, int thread_index) {
     CURL *curl = curl_easy_init();
 
-    long curl_request_timeout = 2;
-
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
     //curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)3);
     //curl_easy_setopt(curl, CURLOPT_SERVER_RESPONSE_TIMEOUT, (long)3);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, curl_request_timeout);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)request_timeout);
 
 #include "write_callback_calls.h"
 
@@ -118,7 +116,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, int thread_i
         // TODO: recheck this MAC again
         CURL_TIMEOUTS_COUNT++;
         if (CURL_TIMEOUTS_COUNT >= NB_THREADS) {
-            fprintf(stderr,"[w] Stopping current scan: %ds timeout reached for %d out of %d threads.\n", curl_request_timeout, CURL_TIMEOUTS_COUNT, NB_THREADS);
+            fprintf(stderr,"[w] Stopping current scan: %ds timeout reached for %d out of %d threads.\n", request_timeout, CURL_TIMEOUTS_COUNT, NB_THREADS);
             GRACEFUL_EXIT_ASKED = true;
         }
     }
@@ -364,9 +362,19 @@ void *start(void *_) {
         }
  
         write_checkpoint(mac);
+
         compute_next_mac(next_mac,mac);
         strcpy(mac,next_mac);
         MAC_COUNT++;
+
+        if (pause_nb > 0 && MAC_COUNT % pause_nb == 0) {
+            GUI_update_scanning_labels("Paused");
+            printf("pausing for %d seconds\n", pause_duration / 1000);
+            usleep(pause_duration * 1000); // µ secs
+        } else if (request_delay > 0) {
+            usleep(request_delay * 1000); // µ secs
+        }
+
     }
 
     for (int i=0;i<NB_THREADS;i++) {

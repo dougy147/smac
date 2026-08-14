@@ -40,6 +40,10 @@ QLineEdit   *entry_settings_save_dir;
 QCheckBox   *checkbox_settings_autosave;
 QCheckBox   *checkbox_settings_checkpoints;
 QToolButton *toolbutton_settings_select_dir;
+QLineEdit   *entry_request_delay;
+QLineEdit   *entry_request_timeout;
+QLineEdit   *entry_pause_nb;
+QLineEdit   *entry_pause_duration;
 
 /* Scan stuff */
 bool SCANNING = false;
@@ -429,6 +433,51 @@ int main(int argc, char *argv[]) {
             system(mkdir_cmd); // create checkpoints dir
             printf("selected checkpoints dir = %s\n", output_dir_checkpoints);
     });
+
+
+    // validators are here to limit what can be written in a user input text box
+    // here we just want integers between 0 and whatever
+    // https://runebook.dev/en/docs/qt/qleinteger/QLEInteger
+    entry_request_delay = w->findChild<QLineEdit*>("entry_request_delay");
+    QIntValidator* validator_entry_request_delay = new QIntValidator(0, 3600000, entry_request_delay);
+    entry_request_delay->setValidator(validator_entry_request_delay);
+    if (request_delay >= 0) {
+        entry_request_delay->setText(QString::number(request_delay));
+    }
+    QObject::connect(entry_request_delay, &QLineEdit::textChanged,entry_request_delay, []() { 
+            request_delay = entry_request_delay->text().toInt();
+    });
+
+    entry_request_timeout = w->findChild<QLineEdit*>("entry_request_timeout");
+    QIntValidator* validator_entry_request_timeout = new QIntValidator(0, 3600000, entry_request_timeout);
+    entry_request_timeout->setValidator(validator_entry_request_timeout);
+    if (request_timeout >= 0) {
+        entry_request_timeout->setText(QString::number(request_timeout));
+    }
+    QObject::connect(entry_request_timeout, &QLineEdit::textChanged,entry_request_timeout, []() { 
+            request_timeout = entry_request_timeout->text().toInt();
+    });
+
+    entry_pause_nb = w->findChild<QLineEdit*>("entry_pause_nb");
+    QIntValidator* validator_entry_pause_nb = new QIntValidator(0, 3600000, entry_pause_nb);
+    entry_pause_nb->setValidator(validator_entry_pause_nb);
+    if (pause_nb >= 0) {
+        entry_pause_nb->setText(QString::number(pause_nb));
+    }
+    QObject::connect(entry_pause_nb, &QLineEdit::textChanged,entry_pause_nb, []() { 
+            pause_nb = entry_pause_nb->text().toInt();
+    });
+
+    entry_pause_duration = w->findChild<QLineEdit*>("entry_pause_duration");
+    QIntValidator* validator_entry_pause_duration = new QIntValidator(0, 3600000, entry_pause_duration);
+    entry_pause_duration->setValidator(validator_entry_pause_duration);
+    if (pause_duration >= 0) {
+        entry_pause_duration->setText(QString::number(pause_duration));
+    }
+    QObject::connect(entry_pause_duration, &QLineEdit::textChanged,entry_pause_duration, []() { 
+            pause_duration = entry_pause_duration->text().toInt();
+    });
+
 
     /* =============================================== */
 

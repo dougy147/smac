@@ -47,7 +47,7 @@ const char *tz       = "Europe/Amsterdam";
 void write_account_to_save_file(char *mac, char *exp_date) {
     if (AUTO_SAVE_ACCOUNTS) {
         char save_path[MAX_URL_LEN*2] = {0};
-        snprintf(save_path,sizeof(save_path),"%s/%s",output_dir,output_filename);
+        snprintf(save_path,sizeof(save_path),"%s/%s",output_dir,output_filename_accounts);
         FILE *f = fopen(save_path,"a");
         if (ACCOUNTS_COUNT == 0) {
             fprintf(f,"%s\n",host);
@@ -55,6 +55,16 @@ void write_account_to_save_file(char *mac, char *exp_date) {
         }
         fprintf(f,"%s [%s]\n",mac,exp_date);
         printf("[i] Wrote new account to file: %s\n", save_path);
+        fclose(f);
+    }
+}
+
+void write_checkpoint(char *mac) {
+    if (USE_CHECKPOINTS && SCAN_MODE == SEQUENTIAL) {
+        char save_path[MAX_URL_LEN*2] = {0};
+        snprintf(save_path,sizeof(save_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
+        FILE *f = fopen(save_path,"w");
+        fprintf(f,"%s",mac);
         fclose(f);
     }
 }
@@ -92,13 +102,12 @@ void make_request(char *url, char *mac, struct curl_slist *headers, int thread_i
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, curl_request_timeout);
 
 #include "write_callback_calls.h"
-    //curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    //printf("thread_index = %d\n",thread_index);
+
     CURLcode res = curl_easy_perform(curl);
 
     if (res == 3) {
         // TODO: This is a ill-formatted URL, we should stop scanning IMMEDIATELY
-        fprintf(stderr,"[w] Stopping current scan: invalid host URL.\n");
+        fprintf(stderr,"[w] Stopping current scan: invalid host URL \"%s\"\n",host);
         GRACEFUL_EXIT_ASKED = true;
     }
     if (res == 6) {
@@ -353,7 +362,8 @@ void *start(void *_) {
                 }
             }
         }
-        
+ 
+        write_checkpoint(mac);
         compute_next_mac(next_mac,mac);
         strcpy(mac,next_mac);
         MAC_COUNT++;

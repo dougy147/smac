@@ -13,6 +13,9 @@
 #include <QToolButton>
 #include <QCheckBox>
 #include <QFileDialog>
+#include <QMessageBox>
+
+#include <unistd.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -35,6 +38,7 @@ QLineEdit   *entry_settings_last_mac;
 QLineEdit   *entry_settings_mac_prefix;
 QLineEdit   *entry_settings_save_dir;
 QCheckBox   *checkbox_settings_autosave;
+QCheckBox   *checkbox_settings_checkpoints;
 QToolButton *toolbutton_settings_select_dir;
 
 /* Scan stuff */
@@ -130,10 +134,11 @@ bool update_server_url() {
     if (strcmp(host,host_previous) == 0) return false;
     
     //TODO: Check if it is a correct URL
-    update_output_filename_from_url(output_filename, host);
+    update_output_filename_from_url(output_filename_accounts, host);
+    update_output_filename_from_url(output_filename_checkpoints, host);
 
     printf("[i] Updated 'entry_server_url' from \"%s\" to \"%s\"\n", host_previous, host);
-    printf("[i] Updated 'output_filename' = \"%s\"\n", output_filename);
+    printf("[i] Updated 'output_filename' = \"%s\"\n", output_filename_accounts);
 
     strcpy(host_previous,host);
     return true;
@@ -143,6 +148,53 @@ void import_settings() {
     strcpy(mac_first,  entry_settings_first_mac->text().toStdString().c_str());
     strcpy(mac_last,   entry_settings_last_mac->text().toStdString().c_str());
     strcpy(mac_prefix, entry_settings_mac_prefix->text().toStdString().c_str());
+}
+
+void path_to_windows_path(char *path) {
+    char *p = path;
+    char win_path[MAX_URL_LEN] = {0};
+    while (p[0] != '\0') {
+        if (p[0] == '/') {
+            win_path[strlen(win_path)] = '\\';
+            win_path[strlen(win_path)] = '\\';
+        } else {
+            win_path[strlen(win_path)] = p[0];
+        }
+        p++;
+    }
+    win_path[strlen(win_path)] = '\0';
+    strcpy(path,win_path);
+}
+
+void load_checkpoint() {
+    char checkpoint_path[MAX_URL_LEN] = {0};
+    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
+    printf("checkpoint_path = %s\n", checkpoint_path);
+    FILE *f = fopen(checkpoint_path,"r");
+    if (f) {
+        char buffer[STR_MAC_LEN] = {0};
+        fread (buffer, 1, STR_MAC_LEN, f);
+        printf("read last checkpoint = %s\n", buffer);
+        strcpy(mac_first,buffer);
+        printf("new first mac = %s\n", mac_first);
+        fclose(f);
+    }
+
+    if (SCAN_MODE == SEQUENTIAL) {
+        label_mac->setText(mac_first);
+        strcpy(mac,mac_first);
+        printf("new mac = %s\n", mac);
+    }
+}
+
+void remove_checkpoint() {
+    char checkpoint_path[MAX_URL_LEN] = {0};
+    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
+#ifdef _WIN32
+        DeleteFileA(checkpoint_path);
+#else
+        unlink(checkpoint_path);
+#endif
 }
 
 int main(int argc, char *argv[]) {
@@ -210,10 +262,13 @@ int main(int argc, char *argv[]) {
     button_reset_to_first_mac = w->findChild<QPushButton*>("button_reset_to_first_mac");
 
     QObject::connect(button_reset_to_first_mac, &QPushButton::clicked,button_reset_to_first_mac, [&]() { 
-            strcpy(mac_first,entry_settings_first_mac->text().toLocal8Bit().constData());
-            label_mac->setText(mac_first);
-            if (!SCANNING && SCAN_MODE == SEQUENTIAL) {
-                strcpy(mac,mac_first);
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::question(button_reset_to_first_mac, "Reset checkpoint", "Reset checkpoint for that host?", QMessageBox::Yes|QMessageBox::No);
+            if (reply == QMessageBox::Yes) {
+                remove_checkpoint();
+                strcpy(mac_first,entry_settings_first_mac->text().toLocal8Bit().constData());
+                label_mac->setText(mac_first);
+                if (!SCANNING && SCAN_MODE == SEQUENTIAL) strcpy(mac,mac_first);
             }
     });
 
@@ -255,6 +310,8 @@ int main(int argc, char *argv[]) {
                     MAC_COUNT = 0;
                     strcpy(mac,mac_first); // for sequential mode
                 }
+                
+                load_checkpoint();
 
                 GRACEFUL_EXIT_ASKED = false; // cf below
                 pthread_create(&main_thread, NULL, &start, NULL);
@@ -288,6 +345,16 @@ int main(int argc, char *argv[]) {
     entry_settings_mac_prefix      = w->findChild<QLineEdit*>("settings_mac_prefix");
     if (strlen(mac_prefix) > 0) entry_settings_mac_prefix->setText(mac_prefix);
 
+    checkbox_settings_checkpoints  = w->findChild<QCheckBox*>("settings_use_checkpoints");
+    if (USE_CHECKPOINTS) {
+        checkbox_settings_checkpoints->setChecked(true);
+    }
+    
+    QObject::connect(checkbox_settings_checkpoints, &QCheckBox::toggled, w, [&]() {
+        USE_CHECKPOINTS = !USE_CHECKPOINTS;
+        printf("USE_CHECKPOINTS = %d\n",USE_CHECKPOINTS);
+    });
+
     checkbox_settings_autosave     = w->findChild<QCheckBox*>("settings_autosave_checkbox");
     if (AUTO_SAVE_ACCOUNTS) {
         checkbox_settings_autosave->setChecked(true);
@@ -299,7 +366,6 @@ int main(int argc, char *argv[]) {
     });
 
 
-
     toolbutton_settings_select_dir = w->findChild<QToolButton*>("settings_select_dir_toolbutton");
     entry_settings_save_dir        = w->findChild<QLineEdit*>("settings_save_dir");
 
@@ -307,14 +373,17 @@ int main(int argc, char *argv[]) {
         entry_settings_save_dir->setText(output_dir);
 
         // TODO: make this in a proper function
-#ifdef _WIN32
-        char mkdir_cmd[MAX_URL_LEN] = "mkdir ";
-#else
-        char mkdir_cmd[MAX_URL_LEN] = "mkdir -p ";
-#endif
+        char mkdir_cmd[MAX_URL_LEN] = {0};
+        strcat(mkdir_cmd, "mkdir ");
         strcat(mkdir_cmd, output_dir);
-        system(mkdir_cmd);
+        system(mkdir_cmd); // create result dir
         printf("created saving dir: %s\n", mkdir_cmd);
+        mkdir_cmd[0] = '\0';
+        strcat(mkdir_cmd, "mkdir ");
+        strcat(mkdir_cmd, output_dir_checkpoints);
+        system(mkdir_cmd); // create results/checkpoints dir
+        printf("created checkpoints saving dir: %s\n", mkdir_cmd);
+
     }
 
     QObject::connect(toolbutton_settings_select_dir, &QToolButton::clicked,toolbutton_settings_select_dir, [&]() { 
@@ -324,12 +393,26 @@ int main(int argc, char *argv[]) {
 
             if (strlen(filepath) == 0) return;
 
+            // save new output dir
             entry_settings_save_dir->setText(filepath);
             strcpy(output_dir,filepath);
-            printf("selected dir = %s\n", filepath);
-    });
+#ifdef _WIN32
+            path_to_windows_path(output_dir);
+#endif
+            printf("selected dir = %s\n", output_dir);
 
-     
+            // save new checkpoints dir
+            strcpy(output_dir_checkpoints, output_dir);
+            strcat(output_dir_checkpoints,"/checkpoints");
+#ifdef _WIN32
+            path_to_windows_path(output_dir_checkpoints);
+#endif
+            char mkdir_cmd[MAX_URL_LEN] = {0}; 
+            strcat(mkdir_cmd, "mkdir ");
+            strcat(mkdir_cmd, output_dir_checkpoints);
+            system(mkdir_cmd); // create checkpoints dir
+            printf("selected checkpoints dir = %s\n", output_dir_checkpoints);
+    });
 
     /* =============================================== */
 

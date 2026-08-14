@@ -248,7 +248,7 @@
       <property name="geometry">
        <rect>
         <x>50</x>
-        <y>160</y>
+        <y>190</y>
         <width>141</width>
         <height>24</height>
        </rect>
@@ -261,7 +261,7 @@
       <property name="geometry">
        <rect>
         <x>190</x>
-        <y>250</y>
+        <y>280</y>
         <width>79</width>
         <height>26</height>
        </rect>
@@ -271,7 +271,7 @@
       <property name="geometry">
        <rect>
         <x>50</x>
-        <y>250</y>
+        <y>280</y>
         <width>131</width>
         <height>20</height>
        </rect>
@@ -287,7 +287,7 @@
       <property name="geometry">
        <rect>
         <x>180</x>
-        <y>200</y>
+        <y>230</y>
         <width>281</width>
         <height>26</height>
        </rect>
@@ -303,7 +303,7 @@
       <property name="geometry">
        <rect>
         <x>50</x>
-        <y>200</y>
+        <y>230</y>
         <width>91</width>
         <height>20</height>
        </rect>
@@ -316,13 +316,26 @@
       <property name="geometry">
        <rect>
         <x>150</x>
-        <y>200</y>
+        <y>230</y>
         <width>25</width>
         <height>25</height>
        </rect>
       </property>
       <property name="text">
        <string>...</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="settings_use_checkpoints">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>160</y>
+        <width>141</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Use checkpoints</string>
       </property>
      </widget>
     </widget>

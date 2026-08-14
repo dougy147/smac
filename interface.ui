@@ -44,7 +44,7 @@
        <rect>
         <x>110</x>
         <y>10</y>
-        <width>381</width>
+        <width>261</width>
         <height>26</height>
        </rect>
       </property>
@@ -142,8 +142,8 @@
      <widget class="QPushButton" name="button_reset_to_first_mac">
       <property name="geometry">
        <rect>
-        <x>270</x>
-        <y>110</y>
+        <x>380</x>
+        <y>10</y>
         <width>80</width>
         <height>26</height>
        </rect>
@@ -158,16 +158,19 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>90</x>
+        <x>150</x>
         <y>110</y>
-        <width>161</width>
-        <height>26</height>
+        <width>201</width>
+        <height>41</height>
        </rect>
       </property>
       <property name="font">
        <font>
-        <pointsize>12</pointsize>
+        <pointsize>13</pointsize>
        </font>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
       </property>
      </widget>
     </widget>
@@ -261,7 +264,7 @@
       <property name="geometry">
        <rect>
         <x>190</x>
-        <y>280</y>
+        <y>470</y>
         <width>79</width>
         <height>26</height>
        </rect>
@@ -271,7 +274,7 @@
       <property name="geometry">
        <rect>
         <x>50</x>
-        <y>280</y>
+        <y>470</y>
         <width>131</width>
         <height>20</height>
        </rect>
@@ -336,6 +339,111 @@
       </property>
       <property name="text">
        <string>Use checkpoints</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_8">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>280</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Req delay (ms)</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="entry_request_delay">
+      <property name="geometry">
+       <rect>
+        <x>150</x>
+        <y>280</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="entry_pause_nb">
+      <property name="geometry">
+       <rect>
+        <x>150</x>
+        <y>320</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_12">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>320</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Pause every...</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="entry_pause_duration">
+      <property name="geometry">
+       <rect>
+        <x>150</x>
+        <y>360</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_13">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>360</y>
+        <width>101</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Pause (ms)</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="entry_request_timeout">
+      <property name="geometry">
+       <rect>
+        <x>150</x>
+        <y>400</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_14">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>400</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Timeout (ms)</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_15">
+      <property name="geometry">
+       <rect>
+        <x>210</x>
+        <y>320</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>...requests</string>
       </property>
      </widget>
     </widget>

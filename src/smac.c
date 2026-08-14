@@ -19,6 +19,7 @@
 //char mac[STR_MAC_LEN]  = "00:1A:79:00:00:00";
 
 int MAC_COUNT = 0;
+int ACCOUNTS_COUNT = 0;
 
 int CURL_TIMEOUTS_COUNT = 0; // if above NB_THREADS, stop scanning
 
@@ -42,6 +43,21 @@ const char *ua       = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 
 const char *x_ua     = "Model: MAG250; Link: WiFi";
 const char *stb_lang = "en";
 const char *tz       = "Europe/Amsterdam";
+
+void write_account_to_save_file(char *mac, char *exp_date) {
+    if (AUTO_SAVE_ACCOUNTS) {
+        char save_path[MAX_URL_LEN*2] = {0};
+        snprintf(save_path,sizeof(save_path),"%s/%s",output_dir,output_filename);
+        FILE *f = fopen(save_path,"a");
+        if (ACCOUNTS_COUNT == 0) {
+            fprintf(f,"%s\n",host);
+            fprintf(f,"------------------------\n");
+        }
+        fprintf(f,"%s [%s]\n",mac,exp_date);
+        printf("[i] Wrote new account to file: %s\n", save_path);
+        fclose(f);
+    }
+}
 
 void encode_mac(char *encoded_mac, char *mac) {
     int encoded_mac_len = 0;
@@ -207,6 +223,8 @@ void *check(void *thread_args) {
     //printf("exp_date: %s\n",exp_date);
     printf("[%d] %s [%s]\n", args.mac_index, args.mac, exp_date);
     GUI_add_account_to_accounts_list(args.mac, exp_date);
+    write_account_to_save_file(args.mac, exp_date);
+    ACCOUNTS_COUNT++;
 
     THREADS_COUNT--;
     threads[args.thread_index] = 0;

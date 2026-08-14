@@ -289,15 +289,43 @@ int main(int argc, char *argv[]) {
     if (strlen(mac_prefix) > 0) entry_settings_mac_prefix->setText(mac_prefix);
 
     checkbox_settings_autosave     = w->findChild<QCheckBox*>("settings_autosave_checkbox");
+    if (AUTO_SAVE_ACCOUNTS) {
+        checkbox_settings_autosave->setChecked(true);
+    }
+    
+    QObject::connect(checkbox_settings_autosave, &QCheckBox::toggled, w, [&]() {
+        AUTO_SAVE_ACCOUNTS = !AUTO_SAVE_ACCOUNTS;
+        printf("AUTO_SAVE_ACCOUNTS = %d\n",AUTO_SAVE_ACCOUNTS);
+    });
+
+
 
     toolbutton_settings_select_dir = w->findChild<QToolButton*>("settings_select_dir_toolbutton");
     entry_settings_save_dir        = w->findChild<QLineEdit*>("settings_save_dir");
+
+    if (strlen(output_dir) > 0) {
+        entry_settings_save_dir->setText(output_dir);
+
+        // TODO: make this in a proper function
+#ifdef _WIN32
+        char mkdir_cmd[MAX_URL_LEN] = "mkdir ";
+#else
+        char mkdir_cmd[MAX_URL_LEN] = "mkdir -p ";
+#endif
+        strcat(mkdir_cmd, output_dir);
+        system(mkdir_cmd);
+        printf("created saving dir: %s\n", mkdir_cmd);
+    }
 
     QObject::connect(toolbutton_settings_select_dir, &QToolButton::clicked,toolbutton_settings_select_dir, [&]() { 
             const QString f = QFileDialog::getExistingDirectory();
             char filepath[128];
             strcpy(filepath,f.toLocal8Bit().constData());
+
+            if (strlen(filepath) == 0) return;
+
             entry_settings_save_dir->setText(filepath);
+            strcpy(output_dir,filepath);
             printf("selected dir = %s\n", filepath);
     });
 

@@ -27,7 +27,7 @@
      <bool>false</bool>
     </property>
     <property name="tabShape">
-     <enum>QTabWidget::TabShape::Rounded</enum>
+     <enum>QTabWidget::Rounded</enum>
     </property>
     <property name="currentIndex">
      <number>0</number>
@@ -89,6 +89,7 @@
       </property>
       <property name="font">
        <font>
+        <weight>50</weight>
         <bold>false</bold>
        </font>
       </property>
@@ -162,6 +163,11 @@
         <width>161</width>
         <height>26</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
       </property>
      </widget>
     </widget>
@@ -288,6 +294,7 @@
       </property>
       <property name="font">
        <font>
+        <weight>75</weight>
         <bold>true</bold>
        </font>
       </property>
@@ -333,6 +340,7 @@
      <font>
       <family>Adwaita Mono</family>
       <pointsize>20</pointsize>
+      <weight>50</weight>
       <bold>false</bold>
      </font>
     </property>
@@ -347,7 +355,7 @@
      <x>0</x>
      <y>0</y>
      <width>533</width>
-     <height>22</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

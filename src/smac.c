@@ -1,3 +1,5 @@
+/* NOTE: I want to keep this smac.c program in pure C */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -9,12 +11,16 @@
 #define MAX_URL_LEN 2048
 #define MAX_HEADERS_LEN 2048
 
-#define STR_MAC_LEN (6*2) + 5 + 1
+#define MAC_LEN 12
+#define STR_MAC_LEN MAC_LEN + 5 + 1
 
-#define NB_REQUESTS 500
+#include "shared.h"
+//char host[MAX_URL_LEN] = "http://localhost:8008";
+//char mac[STR_MAC_LEN]  = "00:1A:79:00:00:00";
 
-char host[MAX_URL_LEN] = "http://localhost:8008";
-char mac[STR_MAC_LEN]  = "00:1A:79:00:00:00";
+int MAC_COUNT = 0;
+
+int CURL_TIMEOUTS_COUNT = 0; // if above NB_THREADS, stop scanning
 
 typedef struct {
     int thread_index;
@@ -58,12 +64,40 @@ void encode_mac(char *encoded_mac, char *mac) {
 
 void make_request(char *url, char *mac, struct curl_slist *headers, int thread_index) {
     CURL *curl = curl_easy_init();
+
+    long curl_request_timeout = 2;
+
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    //curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)3);
+    //curl_easy_setopt(curl, CURLOPT_SERVER_RESPONSE_TIMEOUT, (long)3);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, curl_request_timeout);
+
 #include "write_callback_calls.h"
     //curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     //printf("thread_index = %d\n",thread_index);
     CURLcode res = curl_easy_perform(curl);
+
+    if (res == 3) {
+        // TODO: This is a ill-formatted URL, we should stop scanning IMMEDIATELY
+        fprintf(stderr,"[w] Stopping current scan: invalid host URL.\n");
+        GRACEFUL_EXIT_ASKED = true;
+    }
+    if (res == 6) {
+        fprintf(stderr,"[w] Stopping current scan: could not resolve host URL.\n");
+        GRACEFUL_EXIT_ASKED = true;
+    }
+    if (res == 28) {
+        // TODO: recheck this MAC again
+        CURL_TIMEOUTS_COUNT++;
+        if (CURL_TIMEOUTS_COUNT >= NB_THREADS) {
+            fprintf(stderr,"[w] Stopping current scan: %ds timeout reached for %d out of %d threads.\n", curl_request_timeout, CURL_TIMEOUTS_COUNT, NB_THREADS);
+            GRACEFUL_EXIT_ASKED = true;
+        }
+    }
+    //TODO: handle other useful exit codes (timeouts, empty answers, etc.)
     //printf("mac = %s ; index = %d ; response[] = <<<%s>>>\n", mac, thread_index,responses[thread_index]);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
@@ -137,7 +171,7 @@ void *check(void *thread_args) {
     headers = curl_slist_append(headers,tmp_headers);
 
     // handshake
-    char token[128] = {0};
+    char token[MAX_TOKEN_LEN] = {0};
     handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, args.thread_index);
 
     if (strlen(token) == 0) {
@@ -160,7 +194,7 @@ void *check(void *thread_args) {
     headers = curl_slist_append(headers,tmp_headers);
 
     // account verif
-    char exp_date[128] = {0};
+    char exp_date[MAX_EXP_LEN] = {0};
     get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,args.thread_index);
    
     if (strlen(exp_date) == 0) {
@@ -172,10 +206,11 @@ void *check(void *thread_args) {
 
     //printf("exp_date: %s\n",exp_date);
     printf("[%d] %s [%s]\n", args.mac_index, args.mac, exp_date);
+    GUI_add_account_to_accounts_list(args.mac, exp_date);
 
     THREADS_COUNT--;
     threads[args.thread_index] = 0;
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
     return NULL;
 }
 
@@ -188,32 +223,85 @@ long long power(int n, unsigned int exp) {
     return res;
 }
 
-void compute_next_mac(char *next_mac, char *mac) {
+void compute_next_mac_random(char *next_mac) {
+    // handle prefix
+    char mac_prefix_no_colon[MAC_LEN+1] = {0};
+    for (int i = 0; i < strlen(mac_prefix); i++) {
+        if (mac_prefix[i] != ':') mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = mac_prefix[i];
+    }
+    mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '\0';
+
+    int bytes_to_fill = MAC_LEN - strlen(mac_prefix_no_colon);
+
+    for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
+    long long mac_prefix_LL = strtoll(mac_prefix_no_colon,NULL,16);
+ 
+    char random_mac[STR_MAC_LEN] = {0};
+
+    long long random_part = 0;
+    for (int i=1;i<=bytes_to_fill;i++) {
+        random_part += (long long)rand() << ((i-1)*4);
+    }
+    random_part %= power(16,bytes_to_fill);
+    long long random_mac_LL = mac_prefix_LL + random_part;
+
+    sprintf(next_mac,"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
+        random_mac_LL >> 40 & 0XFF, random_mac_LL >> 32 & 0XFF, 
+        random_mac_LL >> 24 & 0XFF, random_mac_LL >> 16 & 0XFF, 
+        random_mac_LL >> 8 & 0XFF,  random_mac_LL >> 0 & 0XFF);  
+
+//    printf("mac_prefix = %s            \n", mac_prefix);
+//    printf("bytes_to_fill = %d\n", bytes_to_fill);
+//    printf("power(16,%d) = %lld\n",bytes_to_fill, power(16,bytes_to_fill));
+//    printf("mac_prefix_no_colon = %s\n",mac_prefix_no_colon);
+//    printf("mac_prefix_LL = %lld\n",mac_prefix_LL);
+//    printf("random_part       = %lld\n",random_part);
+//    printf("random_mac_LL = %lld\n", random_mac_LL);
+//    printf("random_mac = %s\n", random_mac);
+
+}
+
+void compute_next_mac_sequential(char *next_mac, char *mac) {
     char mac_no_colon[12+1] = {0};
     for (int i = 0; i < strlen(mac); i++) {
         if (mac[i] != ':') mac_no_colon[strlen(mac_no_colon)] = mac[i];
     }
     mac_no_colon[strlen(mac_no_colon)] = '\0';
 
-    long long mac_as_long_long = strtoll(mac_no_colon,NULL,16);
-    long long next_mac_as_long_long = (mac_as_long_long + 1) % power(16,12);
+    long long mac_LL = strtoll(mac_no_colon,NULL,16);
+    long long next_mac_LL = (mac_LL + 1) % power(16,12);
 
     //char next_mac[FULL_MAC_STR_LEN] = {0};
     sprintf(next_mac,"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
-        next_mac_as_long_long >> 40 & 0XFF, next_mac_as_long_long >> 32 & 0XFF, 
-        next_mac_as_long_long >> 24 & 0XFF, next_mac_as_long_long >> 16 & 0XFF, 
-        next_mac_as_long_long >> 8 & 0XFF,  next_mac_as_long_long >> 0 & 0XFF);  
+        next_mac_LL >> 40 & 0XFF, next_mac_LL >> 32 & 0XFF, 
+        next_mac_LL >> 24 & 0XFF, next_mac_LL >> 16 & 0XFF, 
+        next_mac_LL >> 8 & 0XFF,  next_mac_LL >> 0 & 0XFF);  
+}
+
+void compute_next_mac(char *next_mac, char *mac) {
+    if (SCAN_MODE == SEQUENTIAL)  compute_next_mac_sequential(next_mac, mac);
+    else if (SCAN_MODE == RANDOM) compute_next_mac_random(next_mac);
+    //else { fprintf(stderr,"[!] ERROR: Unknown SCAN_MODE\n"); }
 }
 
 void *start(void *_) {
 
-    for (int i=0;i<NB_REQUESTS;i++) {
+    // NOTE: smac.c knows nothing about wether the host it has been
+    //       passed is valid or not. It checks accoutns, that is all.
 
-        printf("[%d] %s\n",i, mac);
-        //update label_mac
+    // Initialize threads to 0
+    for (int i=0;i<NB_THREADS;i++) threads[i] = 0;
 
-        label_mac->setText(mac);
+    // Let's loop until stop is asked
+    // TODO: Find a proper way
+    while (!GRACEFUL_EXIT_ASKED) {
 
+        //printf("[%d] %s\n",MAC_COUNT, mac);
+        GUI_update_scanning_labels(mac);
+
+        // NOTE: We proceed by batch. Simultaneaous requests are
+        // started AND stopped together. THis is incidentally useful
+        // to reset the CURL_TIMEOUTS_COUNT variable.
         if (THREADS_COUNT >= NB_THREADS) {
             //empty the queue
             for (int j=0;j<NB_THREADS;j++) {
@@ -221,6 +309,7 @@ void *start(void *_) {
                 int ok = pthread_join(threads[j],NULL);
                 if (ok == 0) threads[j] = 0;
             }
+            CURL_TIMEOUTS_COUNT = 0;
         }
 
         // find an empty thread
@@ -235,7 +324,7 @@ void *start(void *_) {
                     threads_args[j].mac = threads_macs[j];
 
                     //threads_args[j].mac = next_mac();
-                    threads_args[j].mac_index = i;
+                    threads_args[j].mac_index = j;
 
                     int ok = pthread_create(&threads[j], NULL, check, &threads_args[j]);
                     if (ok == 0) {
@@ -247,15 +336,18 @@ void *start(void *_) {
             }
         }
         
-        char next_mac[12+5+1];;
         compute_next_mac(next_mac,mac);
         strcpy(mac,next_mac);
+        MAC_COUNT++;
     }
 
     for (int i=0;i<NB_THREADS;i++) {
         if (threads[i] != 0) pthread_join(threads[i],NULL);
     }
+    THREADS_COUNT = 0;
 
     //printf("finished");
+    GRACEFUL_EXIT_ASKED = false;
+    //GUI_update_scanning_labels(false);
     return NULL;
 }

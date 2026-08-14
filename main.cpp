@@ -151,6 +151,7 @@ void import_settings() {
 }
 
 void path_to_windows_path(char *path) {
+    // TODO: careful with overflow
     char *p = path;
     char win_path[MAX_URL_LEN] = {0};
     while (p[0] != '\0') {
@@ -338,12 +339,27 @@ int main(int argc, char *argv[]) {
 
     entry_settings_first_mac       = w->findChild<QLineEdit*>("settings_first_mac");
     if (strlen(mac_first) > 0) entry_settings_first_mac->setText(mac_first);
+    
+    QObject::connect(entry_settings_first_mac, &QLineEdit::textChanged,entry_settings_first_mac, []() { 
+            strcpy(mac_first,  entry_settings_first_mac->text().toStdString().c_str());
+            if (SCAN_MODE == SEQUENTIAL && !SCANNING && MAC_COUNT == 0) {
+                label_mac->setText(mac_first);
+            }
+    });
 
     entry_settings_last_mac        = w->findChild<QLineEdit*>("settings_last_mac");
     if (strlen(mac_last) > 0) entry_settings_last_mac->setText(mac_last);
+    
+    QObject::connect(entry_settings_last_mac, &QLineEdit::textChanged,entry_settings_last_mac, []() { 
+            strcpy(mac_last,  entry_settings_last_mac->text().toStdString().c_str());
+    });
 
     entry_settings_mac_prefix      = w->findChild<QLineEdit*>("settings_mac_prefix");
     if (strlen(mac_prefix) > 0) entry_settings_mac_prefix->setText(mac_prefix);
+    
+    QObject::connect(entry_settings_last_mac, &QLineEdit::textChanged,entry_settings_last_mac, []() { 
+            strcpy(mac_prefix,  entry_settings_last_mac->text().toStdString().c_str());
+    });
 
     checkbox_settings_checkpoints  = w->findChild<QCheckBox*>("settings_use_checkpoints");
     if (USE_CHECKPOINTS) {

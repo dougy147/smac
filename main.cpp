@@ -60,6 +60,18 @@ int NB_THREADS = 1; // user defined
 
 pthread_t main_thread;
 
+// https://runebook.dev/en/docs/qt/qleinteger/QLEInteger
+// given an int variable name, ensure its associated entry_ will only allow integers in
+// the text field.
+#define entry_of_int(NAME) \
+    QIntValidator* validator_entry_##NAME = new QIntValidator(0, 3600000, entry_##NAME); \
+    entry_##NAME->setValidator(validator_entry_##NAME); \
+    if (NAME >= 0) entry_##NAME->setText(QString::number(NAME)); \
+    else printf("[w] Invalid or absent default value provided for global variable \"" #NAME "\"\n"); \
+    QObject::connect(entry_##NAME, &QLineEdit::textChanged,entry_##NAME, []() {  \
+        NAME = entry_##NAME->text().toInt(); \
+    });
+
 //extern "C" void GUI_update_scanning_labels(const char *mac)
 void GUI_update_scanning_labels(const char *mac)
 {
@@ -326,15 +338,15 @@ int main(int argc, char *argv[]) {
 
     button_reset_to_first_mac = w->findChild<QPushButton*>("button_reset_to_first_mac");
 
-    QObject::connect(button_reset_to_first_mac, &QPushButton::clicked,button_reset_to_first_mac, [&]() { 
-            QMessageBox::StandardButton reply;
-            reply = QMessageBox::question(button_reset_to_first_mac, "Reset checkpoint", "Reset checkpoint for that host?", QMessageBox::Yes|QMessageBox::No);
-            if (reply == QMessageBox::Yes) {
-                remove_checkpoint();
-                strcpy(mac_first,entry_settings_first_mac->text().toLocal8Bit().constData());
-                label_mac->setText(mac_first);
-                if (!SCANNING && SCAN_MODE == SEQUENTIAL) strcpy(mac,mac_first);
-            }
+    QObject::connect(button_reset_to_first_mac, &QPushButton::clicked, button_reset_to_first_mac, [&]() { 
+        QMessageBox::StandardButton reply;
+        reply = QMessageBox::question(button_reset_to_first_mac, "Reset checkpoint", "Reset checkpoint for that host?", QMessageBox::Yes|QMessageBox::No);
+        if (reply == QMessageBox::Yes) {
+            remove_checkpoint();
+            strcpy(mac_first,entry_settings_first_mac->text().toLocal8Bit().constData());
+            label_mac->setText(mac_first);
+            if (!SCANNING && SCAN_MODE == SEQUENTIAL) strcpy(mac,mac_first);
+        }
     });
 
     /* Threads Combobox */
@@ -348,7 +360,6 @@ int main(int argc, char *argv[]) {
 
     QObject::connect(thread_combobox, &QComboBox::activated,thread_combobox, [&]() { 
             NB_THREADS = thread_combobox->currentIndex() + 1;
-            printf("[i] NB_THREADS = %d\n", NB_THREADS);
     });
 
     /* ListView */
@@ -464,6 +475,19 @@ int main(int argc, char *argv[]) {
             strcat(mkdir_cmd, output_dir_checkpoints);
             system(mkdir_cmd); // create checkpoints dir
             printf("selected checkpoints dir = %s\n", output_dir_checkpoints);
+        });
+
+    entry_request_delay = w->findChild<QLineEdit*>("entry_request_delay");
+    entry_of_int(request_delay);
+
+    entry_request_timeout = w->findChild<QLineEdit*>("entry_request_timeout");
+    entry_of_int(request_timeout);
+    
+    entry_pause_nb = w->findChild<QLineEdit*>("entry_pause_nb");
+    entry_of_int(pause_nb);
+
+    entry_pause_duration = w->findChild<QLineEdit*>("entry_pause_duration");
+    entry_of_int(pause_duration);
 
     /* ========= proxy settings ======= */
     entry_proxy_url = w->findChild<QLineEdit*>("entry_proxy_url");
@@ -485,50 +509,6 @@ int main(int argc, char *argv[]) {
         strcpy(proxy_password,  entry_proxy_password->text().toStdString().c_str());
         trim(proxy_password);
         printf("new proxy_password = %s\n",proxy_password);
-    });
-
-
-    // validators are here to limit what can be written in a user input text box
-    // here we just want integers between 0 and whatever
-    // https://runebook.dev/en/docs/qt/qleinteger/QLEInteger
-    entry_request_delay = w->findChild<QLineEdit*>("entry_request_delay");
-    QIntValidator* validator_entry_request_delay = new QIntValidator(0, 3600000, entry_request_delay);
-    entry_request_delay->setValidator(validator_entry_request_delay);
-    if (request_delay >= 0) {
-        entry_request_delay->setText(QString::number(request_delay));
-    }
-    QObject::connect(entry_request_delay, &QLineEdit::textChanged,entry_request_delay, []() { 
-            request_delay = entry_request_delay->text().toInt();
-    });
-
-    entry_request_timeout = w->findChild<QLineEdit*>("entry_request_timeout");
-    QIntValidator* validator_entry_request_timeout = new QIntValidator(0, 3600000, entry_request_timeout);
-    entry_request_timeout->setValidator(validator_entry_request_timeout);
-    if (request_timeout >= 0) {
-        entry_request_timeout->setText(QString::number(request_timeout));
-    }
-    QObject::connect(entry_request_timeout, &QLineEdit::textChanged,entry_request_timeout, []() { 
-            request_timeout = entry_request_timeout->text().toInt();
-    });
-
-    entry_pause_nb = w->findChild<QLineEdit*>("entry_pause_nb");
-    QIntValidator* validator_entry_pause_nb = new QIntValidator(0, 3600000, entry_pause_nb);
-    entry_pause_nb->setValidator(validator_entry_pause_nb);
-    if (pause_nb >= 0) {
-        entry_pause_nb->setText(QString::number(pause_nb));
-    }
-    QObject::connect(entry_pause_nb, &QLineEdit::textChanged,entry_pause_nb, []() { 
-            pause_nb = entry_pause_nb->text().toInt();
-    });
-
-    entry_pause_duration = w->findChild<QLineEdit*>("entry_pause_duration");
-    QIntValidator* validator_entry_pause_duration = new QIntValidator(0, 3600000, entry_pause_duration);
-    entry_pause_duration->setValidator(validator_entry_pause_duration);
-    if (pause_duration >= 0) {
-        entry_pause_duration->setText(QString::number(pause_duration));
-    }
-    QObject::connect(entry_pause_duration, &QLineEdit::textChanged,entry_pause_duration, []() { 
-            pause_duration = entry_pause_duration->text().toInt();
     });
 
 

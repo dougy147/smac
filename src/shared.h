@@ -68,6 +68,7 @@ int SCAN_MODE = SEQUENTIAL;
 
 void GUI_update_scanning_labels(const char*);
 void GUI_add_account_to_accounts_list(const char*,const char*);
+void GUI_scan_ended_by_itself(void);
 
 //#ifdef __cplusplus
 //}

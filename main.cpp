@@ -96,6 +96,18 @@ void GUI_add_account_to_accounts_list(const char *mac, const char *exp_date)
 
 }
 
+void GUI_scan_ended_by_itself() {
+    // update stuff related to a scan not running
+    GRACEFUL_EXIT_ASKED = false;
+    QMetaObject::invokeMethod(button_scan, []() {
+        button_scan->setText("Start");
+    }, Qt::QueuedConnection); 
+
+    QMetaObject::invokeMethod(entry_server_url, []() {
+        entry_server_url->setEnabled(true);
+    }, Qt::QueuedConnection); 
+}
+
 bool is_whitespace(char c) {
     const char *ws = " \t\n\r";
     while (ws[0] != '\0') if (c == *ws++) return true;
@@ -175,23 +187,27 @@ void path_to_windows_path(char *path) {
 }
 
 void load_checkpoint() {
-    char checkpoint_path[MAX_URL_LEN] = {0};
-    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
-    printf("checkpoint_path = %s\n", checkpoint_path);
-    FILE *f = fopen(checkpoint_path,"r");
-    if (f) {
-        char buffer[STR_MAC_LEN] = {0};
-        fread (buffer, 1, STR_MAC_LEN, f);
-        printf("read last checkpoint = %s\n", buffer);
-        strcpy(mac_first,buffer);
-        printf("new first mac = %s\n", mac_first);
-        fclose(f);
-    }
+    if (!SCANNING) {
+        char checkpoint_path[MAX_URL_LEN] = {0};
+        snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
+        
+        printf("checkpoint_path = %s\n", checkpoint_path);
+        
+        FILE *f = fopen(checkpoint_path,"r");
+        if (f) {
+            char last_checkpoint[STR_MAC_LEN] = {0};
+            fread (last_checkpoint, 1, STR_MAC_LEN, f);
+            printf("read last checkpoint = %s\n", last_checkpoint);
+            strcpy(mac_first,last_checkpoint);
+            printf("new first mac = %s\n", mac_first);
+            fclose(f);
+        }
 
-    if (SCAN_MODE == SEQUENTIAL) {
-        label_mac->setText(mac_first);
-        strcpy(mac,mac_first);
-        printf("new mac = %s\n", mac);
+        if (SCAN_MODE == SEQUENTIAL) {
+            label_mac->setText(mac_first);
+            strcpy(mac,mac_first);
+            printf("new mac = %s\n", mac);
+        }
     }
 }
 
@@ -205,14 +221,52 @@ void remove_checkpoint() {
 #endif
 }
 
+void start_scanning_user() {
+    import_settings();
+
+    bool url_updated = update_server_url();
+    if (url_updated) {
+        MAC_COUNT = 0;
+        strcpy(mac,mac_first); // for sequential mode
+    }
+    
+    load_checkpoint();
+    entry_server_url->setEnabled(false);
+
+    GRACEFUL_EXIT_ASKED = false; // cf below
+    pthread_create(&main_thread, NULL, &start, NULL);
+    button_scan->setText("Stop");
+}
+
+void stop_scanning_user() {
+    if (main_thread <= 0) {
+        return;
+    }
+    GRACEFUL_EXIT_ASKED = true; // cf below
+    pthread_cancel(main_thread); // does nothing on windows
+    
+    if (main_thread > 0) {
+        pthread_join(main_thread, NULL); //// wait for thread to finish
+    }
+
+#ifndef _WIN32
+    // ignore this if compiling for windows
+    // race condition => thread might never update GRACEFUL_EXIT_ASKED
+    GRACEFUL_EXIT_ASKED = false;
+#endif
+    
+    button_scan->setText("Start");
+    entry_server_url->setEnabled(true);
+}
+
 int main(int argc, char *argv[]) {
     
     srand(time(NULL));
 
-#ifdef _WIN32 // Hide useless widnows console
-    HWND console = GetConsoleWindow();
-    ShowWindow(console, SW_HIDE);
-#endif
+//#ifdef _WIN32 // Hide useless widnows console
+//    HWND console = GetConsoleWindow();
+//    ShowWindow(console, SW_HIDE);
+//#endif
 
     if (NB_THREADS <= 0) {
         fprintf(stderr,"[!] NB_THREADS must be a positive integer.\n");
@@ -248,19 +302,22 @@ int main(int argc, char *argv[]) {
     /* Host/Server_URL entry text (QLineEdit for now) */
     entry_server_url = w->findChild<QLineEdit*>("server_url");
     entry_server_url->setText(host);
+    QObject::connect(entry_server_url, &QLineEdit::textChanged,entry_server_url, []() { 
+        update_server_url();
+        load_checkpoint();
+    });
+
 
     /* Radio Buttons (sequential, random, mac file?) */
     radio_button_sequential = w->findChild<QRadioButton*>("radio_button_sequential");
-    radio_button_random = w->findChild<QRadioButton*>("radio_button_random");
+    radio_button_random     = w->findChild<QRadioButton*>("radio_button_random");
 
     QObject::connect(radio_button_sequential, &QRadioButton::clicked,radio_button_sequential, [&]() { 
             SCAN_MODE = SEQUENTIAL;
-            printf("[i] SCAN_MODE = SEQUENTIAL\n");
     });
     
     QObject::connect(radio_button_random, &QRadioButton::clicked,radio_button_random, [&]() { 
             SCAN_MODE = RANDOM;
-            printf("[i] SCAN_MODE = RANDOM\n");
     });
 
     /* Current MAC scanned label */
@@ -303,43 +360,15 @@ int main(int argc, char *argv[]) {
     accounts_listview->setModel(accounts_listview_model); // connect model to listview
 
     /* Scan button */ 
-    button_scan = w->findChild<QPushButton*>("pushButton");
+    button_scan = w->findChild<QPushButton*>("button_scan");
 
     // [&]() is a lambda that captures everything by reference (so you can mention previous code)
     // else []()   does not capture
     QObject::connect(button_scan, &QPushButton::clicked, w, [&]() { 
-
-            if (!SCANNING) {
-
-                import_settings();
-
-                bool url_updated = update_server_url();
-                if (url_updated) {
-                    MAC_COUNT = 0;
-                    strcpy(mac,mac_first); // for sequential mode
-                }
-                
-                load_checkpoint();
-
-                GRACEFUL_EXIT_ASKED = false; // cf below
-                pthread_create(&main_thread, NULL, &start, NULL);
-                button_scan->setText("Stop");
-
-            } else {
-
-                GRACEFUL_EXIT_ASKED = true; // cf below
-                pthread_cancel(main_thread); // does nothing on windows
-                if (main_thread > 0) pthread_join(main_thread, NULL); //// wait for thread to finish
-#ifndef _WIN32
-                // ignore this if compiling for windows
-                // race condition => thread might never update GRACEFUL_EXIT_ASKED
-                GRACEFUL_EXIT_ASKED = false;
-#endif
-                button_scan->setText("Start");
-
-            }
-            SCANNING = !SCANNING;
-            GUI_update_scanning_labels(mac);
+        if (!SCANNING) start_scanning_user();
+        else           stop_scanning_user();
+        SCANNING = !SCANNING;
+        GUI_update_scanning_labels(mac);
     });
     
     /* ============== SETTINGS TAB =================== */

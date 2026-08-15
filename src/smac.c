@@ -403,13 +403,16 @@ void *start(void *_) {
 
     }
 
+    printf("finishing threads from within the main\n");
     for (int i=0;i<NB_THREADS;i++) {
-        if (threads[i] != 0) pthread_join(threads[i],NULL);
+        if (threads[i] > 0) pthread_join(threads[i],NULL);
     }
     THREADS_COUNT = 0;
+    printf("finishing main tthread\n");
 
     //printf("finished");
     GRACEFUL_EXIT_ASKED = false;
-    //GUI_update_scanning_labels(false);
+
+    GUI_scan_ended_by_itself();
     return NULL;
 }

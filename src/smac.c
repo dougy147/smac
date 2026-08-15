@@ -28,6 +28,7 @@ typedef struct {
     char *host;
     char *mac;
     int mac_index;
+    UserProxy *proxy;
 } ThreadCheckArgs ;
 
 pthread_t threads[THREADS_LIMIT] = {0};
@@ -88,7 +89,7 @@ void encode_mac(char *encoded_mac, char *mac) {
 
 #include "write_callback_declarations.h"
 
-void make_request(char *url, char *mac, struct curl_slist *headers, int thread_index) {
+void make_request(char *url, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
     CURL *curl = curl_easy_init();
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -98,6 +99,10 @@ void make_request(char *url, char *mac, struct curl_slist *headers, int thread_i
     //curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)3);
     //curl_easy_setopt(curl, CURLOPT_SERVER_RESPONSE_TIMEOUT, (long)3);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)request_timeout);
+
+    curl_easy_setopt(curl, CURLOPT_PROXY, proxy->url);
+    curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, proxy->username);
+    curl_easy_setopt(curl, CURLOPT_PROXYPASSWORD, proxy->password);
 
 #include "write_callback_calls.h"
 
@@ -117,9 +122,18 @@ void make_request(char *url, char *mac, struct curl_slist *headers, int thread_i
         CURL_TIMEOUTS_COUNT++;
         if (CURL_TIMEOUTS_COUNT >= NB_THREADS) {
             fprintf(stderr,"[w] Stopping current scan: %ds timeout reached for %d out of %d threads.\n", request_timeout, CURL_TIMEOUTS_COUNT, NB_THREADS);
-            GRACEFUL_EXIT_ASKED = true;
         }
     }
+    if (res == 5) {
+        fprintf(stderr,"[w] STOP REQUESTED: curl could not resolve proxy \"%s\".\n", proxy->url);
+        GRACEFUL_EXIT_ASKED = true;
+    }
+    // if (res > 0 && res != 23) {
+    //     // error 23 is """normal""" for us since we have changed the callback function
+    //     fprintf(stderr,"[w] Stopping current scan: curl return %d exit code.\n", res);
+    //     GRACEFUL_EXIT_ASKED = true;
+    // }
+    
     //TODO: handle other useful exit codes (timeouts, empty answers, etc.)
     //printf("mac = %s ; index = %d ; response[] = <<<%s>>>\n", mac, thread_index,responses[thread_index]);
     curl_slist_free_all(headers);
@@ -157,17 +171,17 @@ void parse_pattern(char *dst, char *pattern, char *response) {
     }
 }
 
-void handshake(char *token, char *url_path, char *host, char *mac, struct curl_slist *headers, int thread_index) {
+void handshake(char *token, char *url_path, char *host, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
     char url[MAX_URL_LEN];
     snprintf(url,sizeof(url),url_path,host,mac);
-    make_request(url,mac,headers,thread_index);
+    make_request(url,mac,headers,proxy,thread_index);
     parse_pattern(token,(char *)"\"token\"",responses[thread_index]);
 }
 
-void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct curl_slist *headers, int thread_index) {
+void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
     char url[MAX_URL_LEN];
     snprintf(url,sizeof(url),url_path,host,mac);
-    make_request(url,mac,headers,thread_index);
+    make_request(url,mac,headers,proxy,thread_index);
     parse_pattern(exp_date,(char *)"\"phone\"",responses[thread_index]);
 }
 
@@ -193,9 +207,12 @@ void *check(void *thread_args) {
     snprintf(tmp_headers, sizeof(tmp_headers),"Cookie: mac=%s;stb_lang=%s;tz=%s;", args.mac,stb_lang,tz);
     headers = curl_slist_append(headers,tmp_headers);
 
+    // prepare proxy
+    UserProxy proxy = *(UserProxy*)args.proxy;
+
     // handshake
     char token[MAX_TOKEN_LEN] = {0};
-    handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, args.thread_index);
+    handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, &proxy, args.thread_index);
 
     if (strlen(token) == 0) {
         THREADS_COUNT--;
@@ -218,7 +235,7 @@ void *check(void *thread_args) {
 
     // account verif
     char exp_date[MAX_EXP_LEN] = {0};
-    get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,args.thread_index);
+    get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,&proxy,args.thread_index);
    
     if (strlen(exp_date) == 0) {
         THREADS_COUNT--;
@@ -228,7 +245,7 @@ void *check(void *thread_args) {
     }
 
     //printf("exp_date: %s\n",exp_date);
-    printf("[%d] %s [%s]\n", args.mac_index, args.mac, exp_date);
+    printf("(thread %d) [%d] %s [%s]\n", args.mac_index,MAC_COUNT, args.mac, exp_date);
     GUI_add_account_to_accounts_list(args.mac, exp_date);
     write_account_to_save_file(args.mac, exp_date);
     ACCOUNTS_COUNT++;
@@ -350,6 +367,15 @@ void *start(void *_) {
 
                     //threads_args[j].mac = next_mac();
                     threads_args[j].mac_index = j;
+
+                    // prepare proxy
+                    UserProxy proxy = {
+                        .url = proxy_url,
+                        .username = proxy_username,
+                        .password = proxy_password,
+                    };
+
+                    threads_args[j].proxy = &proxy; 
 
                     int ok = pthread_create(&threads[j], NULL, check, &threads_args[j]);
                     if (ok == 0) {

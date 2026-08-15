@@ -2,7 +2,7 @@
 #include <QWidget>
 #include <QtUiTools/QUiLoader>
 
-#include <QFileInfo>
+//#include <QFileInfo>
 #include <QPushButton>
 #include <QLabel>
 #include <QComboBox>
@@ -44,6 +44,9 @@ QLineEdit   *entry_request_delay;
 QLineEdit   *entry_request_timeout;
 QLineEdit   *entry_pause_nb;
 QLineEdit   *entry_pause_duration;
+QLineEdit   *entry_proxy_url;
+QLineEdit   *entry_proxy_username;
+QLineEdit   *entry_proxy_password;
 
 /* Scan stuff */
 bool SCANNING = false;
@@ -432,6 +435,27 @@ int main(int argc, char *argv[]) {
             strcat(mkdir_cmd, output_dir_checkpoints);
             system(mkdir_cmd); // create checkpoints dir
             printf("selected checkpoints dir = %s\n", output_dir_checkpoints);
+
+    /* ========= proxy settings ======= */
+    entry_proxy_url = w->findChild<QLineEdit*>("entry_proxy_url");
+    QObject::connect(entry_proxy_url, &QLineEdit::textChanged,entry_proxy_url, []() { 
+        strcpy(proxy_url,  entry_proxy_url->text().toStdString().c_str());
+        trim(proxy_url);
+        printf("new proxy_url = %s\n",proxy_url);
+    });
+    
+    entry_proxy_username = w->findChild<QLineEdit*>("entry_proxy_username");
+    QObject::connect(entry_proxy_username, &QLineEdit::textChanged,entry_proxy_username, []() { 
+        strcpy(proxy_username,  entry_proxy_username->text().toStdString().c_str());
+        trim(proxy_username);
+        printf("new proxy_username = %s\n",proxy_username);
+    });
+
+    entry_proxy_password = w->findChild<QLineEdit*>("entry_proxy_password");
+    QObject::connect(entry_proxy_password, &QLineEdit::textChanged,entry_proxy_password, []() { 
+        strcpy(proxy_password,  entry_proxy_password->text().toStdString().c_str());
+        trim(proxy_password);
+        printf("new proxy_password = %s\n",proxy_password);
     });
 
 

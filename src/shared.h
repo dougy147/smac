@@ -7,6 +7,9 @@
 
 #define MAX_PROXY_SETTINGS_LEN 128
 
+#define THREADS_LIMIT 32
+int NB_THREADS = 1; // user defined
+
 char host[MAX_URL_LEN] = "http://localhost:8008";
 //char host[MAX_URL_LEN] = {0};
 char host_previous[MAX_URL_LEN] = {0};
@@ -20,15 +23,20 @@ char mac_prefix[STR_MAC_LEN] = "00:1A:79";
 
 bool AUTO_SAVE_ACCOUNTS = true;
 bool USE_CHECKPOINTS    = true;
+
 #ifdef _WIN32
-    char output_dir[MAX_URL_LEN] = "..\\results";
-    char output_dir_checkpoints[MAX_URL_LEN] = "..\\results\\checkpoints";
+#define DEFAULT_RESULTS_DIR "..\\results"
+#define DEFAULT_PATH_SEPARATOR "\\"
 #else
-    char output_dir[MAX_URL_LEN] = "./results";
-    char output_dir_checkpoints[MAX_URL_LEN] = "./results/checkpoints";
+#define DEFAULT_RESULTS_DIR "./results"
+#define DEFAULT_PATH_SEPARATOR "/"
 #endif
-char output_filename_accounts[MAX_URL_LEN+4] = {0};
-char output_filename_checkpoints[MAX_URL_LEN+4] = {0};
+
+char results_dir[MAX_URL_LEN] = DEFAULT_RESULTS_DIR;
+char checkpoints_dir[MAX_URL_LEN] = DEFAULT_RESULTS_DIR DEFAULT_PATH_SEPARATOR "checkpoints";
+
+char accounts_filename[MAX_URL_LEN+4] = {0};
+char checkpoint_filename[MAX_URL_LEN+4] = {0};
 
 /* request settings */
 int request_delay = 0;
@@ -55,6 +63,8 @@ enum {
 } Scan_Mode;
 
 int SCAN_MODE = SEQUENTIAL;
+bool SCANNING = false;
+bool GRACEFUL_EXIT_ASKED = false;
 
 // this is to avoid crashes updating the GUI
 // maybe we also should ensure C++ does not 

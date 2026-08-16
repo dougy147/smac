@@ -2,7 +2,6 @@
 #include <QWidget>
 #include <QtUiTools/QUiLoader>
 
-//#include <QFileInfo>
 #include <QPushButton>
 #include <QLabel>
 #include <QComboBox>
@@ -24,9 +23,9 @@
 
 /* Qt interface stuff */
     /* main scan tab */
-QLineEdit        *label_mac; // was a label is now lineedit disabled
+QLineEdit        *label_mac; // was a label is now lineedit disabled for style
 QProgressBar     *busy_indicator;
-QPushButton      *button_reset_to_first_mac;
+QPushButton      *button_reset_checkpoint;
 QLineEdit        *entry_server_url;
 QListView        *accounts_listview;
 QStringListModel *accounts_listview_model;
@@ -35,8 +34,8 @@ QPushButton      *button_scan;
 QRadioButton     *radio_button_sequential;
 QRadioButton     *radio_button_random;
     /* settings tab */
-QLineEdit   *entry_settings_first_mac;
-QLineEdit   *entry_settings_last_mac;
+QLineEdit   *entry_settings_mac_first;
+QLineEdit   *entry_settings_mac_last;
 QLineEdit   *entry_settings_mac_prefix;
 QLineEdit   *entry_settings_save_dir;
 QCheckBox   *checkbox_settings_autosave;
@@ -49,13 +48,6 @@ QLineEdit   *entry_pause_duration;
 QLineEdit   *entry_proxy_url;
 QLineEdit   *entry_proxy_username;
 QLineEdit   *entry_proxy_password;
-
-/* Scan stuff */
-bool SCANNING = false;
-bool GRACEFUL_EXIT_ASKED = false;
-
-#define THREADS_LIMIT 32
-int NB_THREADS = 1; // user defined
 
 #include "src/smac.c"
 #include "src/shared.h"
@@ -74,6 +66,13 @@ pthread_t main_thread;
         NAME = entry_##NAME->text().toInt(); \
     });
 
+#define yesno(QOBJECT,TITLE,MESSAGE) \
+    QMessageBox::StandardButton reply; \
+    reply = QMessageBox::question((QOBJECT), (TITLE), (MESSAGE), QMessageBox::Yes|QMessageBox::No);
+
+#define to_cstr(QSTRING) \
+    (char*)(QSTRING).toLocal8Bit().constData()
+        
 //extern "C" void GUI_update_scanning_labels(const char *mac)
 void GUI_update_scanning_labels(const char *mac)
 {
@@ -137,58 +136,16 @@ void trim(char *s) {
     s[l] = '\0';
 }
 
-void update_output_filename_from_url(char *output_filename, char *url) {
-    trim(url);
-    const char *http = "http://";
-    const char *https = "https://";
-
-    int i = 0;
-    while (*url != '\0') {
-        if (strncmp(url,http,strlen(http)) == 0)   url+=strlen(http);
-        if (strncmp(url,https,strlen(https)) == 0) url+=strlen(https);
-        output_filename[i++] = url[0];
-        url++;
-        if (*url == '/') break;
-    }
-    const char *extension = ".txt";
-    while (extension[0] != '\0') output_filename[i++] = extension++[0];
-    output_filename[i] = '\0';
-}
-
-void clean_accounts_listview() {
-    accounts_listview_model->removeRows(0, accounts_listview_model->rowCount());
-    accounts_listview->setModel(accounts_listview_model);
-}
-
-bool update_server_url() {
-
-    char new_host[MAX_URL_LEN] = {0};
-
-    strcpy(new_host,entry_server_url->text().toStdString().c_str());
-
-    trim(new_host);
-
-    if (strcmp(host,new_host) == 0) return false;
-    
-    strcpy(host,new_host);
-
-    //TODO: Check if it is a correct URL
-    printf("[i] Updated 'entry_server_url' from \"%s\" to \"%s\"\n", host_previous, host);
-
-    return true;
-}
-
-void import_settings() {
-    strcpy(mac_first,  entry_settings_first_mac->text().toStdString().c_str());
-    strcpy(mac_last,   entry_settings_last_mac->text().toStdString().c_str());
-    strcpy(mac_prefix, entry_settings_mac_prefix->text().toStdString().c_str());
-}
-
 void path_to_windows_path(char *path) {
-    // TODO: careful with overflow
     char *p = path;
     char win_path[MAX_URL_LEN] = {0};
     while (p[0] != '\0') {
+        if (strlen(win_path) == MAX_URL_LEN) {
+            // TODO: properly alert user we are not changing the path because of this:
+            printf("[!] Could not convert to Windows path: buffer overflow, path too long");
+            strcpy(win_path,path);
+            break;
+        }
         if (p[0] == '/') {
             win_path[strlen(win_path)] = '\\';
             win_path[strlen(win_path)] = '\\';
@@ -201,59 +158,109 @@ void path_to_windows_path(char *path) {
     strcpy(path,win_path);
 }
 
-void load_checkpoint() {
-    if (!SCANNING) {
-        char checkpoint_path[MAX_URL_LEN] = {0};
-        snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
-        
-        printf("checkpoint_path = %s\n", checkpoint_path);
-        
-        FILE *f = fopen(checkpoint_path,"r");
-        if (f) {
-            char last_checkpoint[STR_MAC_LEN] = {0};
-            fread (last_checkpoint, 1, STR_MAC_LEN, f);
-            printf("read last checkpoint = %s\n", last_checkpoint);
-            strcpy(mac_first,last_checkpoint);
-            printf("new first mac = %s\n", mac_first);
-            fclose(f);
-        }
+void mkdir(char *path) {
+    char mkdir_cmd[MAX_URL_LEN] = {0};
+    strcat(mkdir_cmd, "mkdir ");
+#ifdef _WIN32
+    path_to_windows_path(path);
+#endif
+    strcat(mkdir_cmd, path);
+    system(mkdir_cmd);
+}
 
-        if (SCAN_MODE == SEQUENTIAL) {
-            label_mac->setText(mac_first);
-            strcpy(mac,mac_first);
-            printf("new mac = %s\n", mac);
-        }
+void build_filename_from_url(char *filename, char *url, const char *extension) {
+    // copy sanitized substring of URL + extension into filename
+    trim(url);
+    const char *http = "http://";
+    const char *https = "https://";
+
+    int i = 0;
+    while (*url != '\0') {
+        if (strncmp(url,http,strlen(http)) == 0)   url+=strlen(http);
+        if (strncmp(url,https,strlen(https)) == 0) url+=strlen(https);
+        filename[i++] = url[0];
+        url++;
+        if (*url == '/') break;
+    }
+
+    while (extension[0] != '\0') filename[i++] = extension++[0];
+    filename[i] = '\0';
+}
+
+void clean_accounts_listview() {
+    accounts_listview_model->removeRows(0, accounts_listview_model->rowCount());
+    accounts_listview->setModel(accounts_listview_model);
+}
+
+bool server_url_changed() {
+    char new_host[MAX_URL_LEN] = {0};
+    strcpy(new_host,to_cstr(entry_server_url->text()));
+    trim(new_host);
+    if (strcmp(host,new_host) == 0) return false;
+    return true;
+}
+
+void update_server_url() {
+    if (!server_url_changed) return;
+    
+    char new_host[MAX_URL_LEN] = {0};
+    strcpy(new_host,to_cstr(entry_server_url->text()));
+    trim(new_host);
+    strcpy(host,new_host);
+}
+
+void load_settings() {
+    strcpy(mac_first,  to_cstr(entry_settings_mac_first->text()));
+    strcpy(mac_last,   to_cstr(entry_settings_mac_last->text()));
+    strcpy(mac_prefix, to_cstr(entry_settings_mac_prefix->text()));
+}
+
+void load_checkpoint(char *server) {
+
+    char checkpoint_path[MAX_URL_LEN] = {0};
+    build_filename_from_url(checkpoint_filename, server, ".txt");
+    
+    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",checkpoints_dir,checkpoint_filename);
+    
+    FILE *f = fopen(checkpoint_path,"r");
+    if (f) {
+        char last_checkpoint[STR_MAC_LEN] = {0};
+        fread (last_checkpoint, 1, STR_MAC_LEN, f);
+        strcpy(mac_first,last_checkpoint);
+        fclose(f);
+    } else {
+        label_mac->setText(mac_first);
+    }
+
+
+    if (SCAN_MODE == SEQUENTIAL) {
+        label_mac->setText(mac_first);
+        strcpy(mac,mac_first);
     }
 }
 
-void remove_checkpoint() {
-    char checkpoint_path[MAX_URL_LEN] = {0};
-    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
+void remove_checkpoint(char *server) {
+    char path[MAX_URL_LEN] = {0};
+    snprintf(path,sizeof(path),"%s/%s",checkpoints_dir,checkpoint_filename);
 #ifdef _WIN32
-        DeleteFileA(checkpoint_path);
+        DeleteFileA(path);
 #else
-        unlink(checkpoint_path);
+        unlink(path);
 #endif
 }
 
 void start_scanning_user() {
-    import_settings();
-
-    bool url_updated = update_server_url();
+    load_settings();
     
-    if (url_updated) {
+    bool url_changed = server_url_changed();
+    if (url_changed) {
 
-        // prompt user for unsaved accounts if no autosave setting AND found valid accounts
         if (!AUTO_SAVE_ACCOUNTS && ACCOUNTS_COUNT > 0) {
-            QMessageBox::StandardButton reply;
-            reply = QMessageBox::question(button_scan, "Clear accounts?", "You are about to perform a new scan. Accounts in the list are not saved and will be deleted. Proceed?", QMessageBox::Yes|QMessageBox::No);
-            if (reply == QMessageBox::No) {
-                strcpy(host,host_previous);
-                printf("rolling back to previous host: %s\n",host);
-                return;
-            }
+            yesno(button_scan, "Clear accounts?", "Accounts in the list are not saved and will be deleted by a new scan. Proceed?");
+            if (reply == QMessageBox::No) return;
         }
         
+        update_server_url();
         MAC_COUNT = 0;
         ACCOUNTS_COUNT = 0;
         strcpy(mac,mac_first); // for sequential mode
@@ -262,11 +269,9 @@ void start_scanning_user() {
 
     strcpy(host_previous,host);
 
-    update_output_filename_from_url(output_filename_accounts, host);
-    update_output_filename_from_url(output_filename_checkpoints, host);
-    printf("[i] 'output_filename' = \"%s\"\n", output_filename_accounts);
-    
-    load_checkpoint();
+    build_filename_from_url(accounts_filename,   host, ".txt");
+    //build_filename_from_url(checkpoint_filename, host, ".txt");
+    if (USE_CHECKPOINTS) load_checkpoint(host);
     entry_server_url->setEnabled(false);
 
     SCANNING = true;
@@ -341,6 +346,9 @@ int main(int argc, char *argv[]) {
     /* Host/Server_URL entry text (QLineEdit for now) */
     entry_server_url = w->findChild<QLineEdit*>("server_url");
     entry_server_url->setText(host);
+    QObject::connect(entry_server_url, &QLineEdit::textChanged,entry_server_url, []() { 
+       if (!SCANNING && USE_CHECKPOINTS) load_checkpoint(to_cstr(entry_server_url->text()));
+    });
 
 
     /* Radio Buttons (sequential, random, mac file?) */
@@ -365,14 +373,17 @@ int main(int argc, char *argv[]) {
 
     /* reset check point button */
 
-    button_reset_to_first_mac = w->findChild<QPushButton*>("button_reset_to_first_mac");
+    button_reset_checkpoint = w->findChild<QPushButton*>("button_reset_checkpoint");
 
-    QObject::connect(button_reset_to_first_mac, &QPushButton::clicked, button_reset_to_first_mac, [&]() { 
-        QMessageBox::StandardButton reply;
-        reply = QMessageBox::question(button_reset_to_first_mac, "Reset checkpoint", "Reset checkpoint for that host?", QMessageBox::Yes|QMessageBox::No);
+    QObject::connect(button_reset_checkpoint, &QPushButton::clicked, button_reset_checkpoint, [&]() {
+        yesno(button_reset_checkpoint,"Reset checkpoint","Reset checkpoint for that host?");
+
         if (reply == QMessageBox::Yes) {
-            remove_checkpoint();
-            strcpy(mac_first,entry_settings_first_mac->text().toLocal8Bit().constData());
+            //char server_cstr[MAX_URL_LEN] = {0};
+            //strcpy(server_cstr, entry_server_url->text().toLocal8Bit().constData());
+            remove_checkpoint(to_cstr(entry_server_url->text()));
+            
+            strcpy(mac_first,entry_settings_mac_first->text().toLocal8Bit().constData());
             label_mac->setText(mac_first);
             if (!SCANNING && SCAN_MODE == SEQUENTIAL) strcpy(mac,mac_first);
         }
@@ -382,9 +393,7 @@ int main(int argc, char *argv[]) {
     QComboBox *thread_combobox= w->findChild<QComboBox*>("thread_combobox");
 
     for (int i=1;i <= (THREADS_LIMIT / 4) ;i++) {
-        char str[10];
-        sprintf(str, "%d", i);
-        thread_combobox->addItems({str});
+        thread_combobox->addItems({QString::number(i)});
     }
 
     QObject::connect(thread_combobox, &QComboBox::activated,thread_combobox, [&]() { 
@@ -413,28 +422,28 @@ int main(int argc, char *argv[]) {
     
     /* ============== SETTINGS TAB =================== */
 
-    entry_settings_first_mac       = w->findChild<QLineEdit*>("settings_first_mac");
-    if (strlen(mac_first) > 0) entry_settings_first_mac->setText(mac_first);
+    entry_settings_mac_first       = w->findChild<QLineEdit*>("settings_mac_first");
+    if (strlen(mac_first) > 0) entry_settings_mac_first->setText(mac_first);
     
-    QObject::connect(entry_settings_first_mac, &QLineEdit::textChanged,entry_settings_first_mac, []() { 
-            strcpy(mac_first,  entry_settings_first_mac->text().toStdString().c_str());
+    QObject::connect(entry_settings_mac_first, &QLineEdit::textChanged,entry_settings_mac_first, []() { 
+            strcpy(mac_first,  to_cstr(entry_settings_mac_first->text()));
             if (SCAN_MODE == SEQUENTIAL && !SCANNING && MAC_COUNT == 0) {
                 label_mac->setText(mac_first);
             }
     });
 
-    entry_settings_last_mac        = w->findChild<QLineEdit*>("settings_last_mac");
-    if (strlen(mac_last) > 0) entry_settings_last_mac->setText(mac_last);
+    entry_settings_mac_last        = w->findChild<QLineEdit*>("settings_mac_last");
+    if (strlen(mac_last) > 0) entry_settings_mac_last->setText(mac_last);
     
-    QObject::connect(entry_settings_last_mac, &QLineEdit::textChanged,entry_settings_last_mac, []() { 
-            strcpy(mac_last,  entry_settings_last_mac->text().toStdString().c_str());
+    QObject::connect(entry_settings_mac_last, &QLineEdit::textChanged,entry_settings_mac_last, []() { 
+            strcpy(mac_last,  to_cstr(entry_settings_mac_last->text()));
     });
 
     entry_settings_mac_prefix      = w->findChild<QLineEdit*>("settings_mac_prefix");
     if (strlen(mac_prefix) > 0) entry_settings_mac_prefix->setText(mac_prefix);
     
-    QObject::connect(entry_settings_last_mac, &QLineEdit::textChanged,entry_settings_last_mac, []() { 
-            strcpy(mac_prefix,  entry_settings_last_mac->text().toStdString().c_str());
+    QObject::connect(entry_settings_mac_last, &QLineEdit::textChanged,entry_settings_mac_last, []() { 
+            strcpy(mac_prefix,  to_cstr(entry_settings_mac_last->text()));
     });
 
     checkbox_settings_checkpoints  = w->findChild<QCheckBox*>("settings_use_checkpoints");
@@ -444,7 +453,6 @@ int main(int argc, char *argv[]) {
     
     QObject::connect(checkbox_settings_checkpoints, &QCheckBox::toggled, w, [&]() {
         USE_CHECKPOINTS = !USE_CHECKPOINTS;
-        printf("USE_CHECKPOINTS = %d\n",USE_CHECKPOINTS);
     });
 
     checkbox_settings_autosave     = w->findChild<QCheckBox*>("settings_autosave_checkbox");
@@ -454,28 +462,15 @@ int main(int argc, char *argv[]) {
     
     QObject::connect(checkbox_settings_autosave, &QCheckBox::toggled, w, [&]() {
         AUTO_SAVE_ACCOUNTS = !AUTO_SAVE_ACCOUNTS;
-        printf("AUTO_SAVE_ACCOUNTS = %d\n",AUTO_SAVE_ACCOUNTS);
     });
-
 
     toolbutton_settings_select_dir = w->findChild<QToolButton*>("settings_select_dir_toolbutton");
     entry_settings_save_dir        = w->findChild<QLineEdit*>("settings_save_dir");
 
-    if (strlen(output_dir) > 0) {
-        entry_settings_save_dir->setText(output_dir);
-
-        // TODO: make this in a proper function
-        char mkdir_cmd[MAX_URL_LEN] = {0};
-        strcat(mkdir_cmd, "mkdir ");
-        strcat(mkdir_cmd, output_dir);
-        system(mkdir_cmd); // create result dir
-        printf("created saving dir: %s\n", mkdir_cmd);
-        mkdir_cmd[0] = '\0';
-        strcat(mkdir_cmd, "mkdir ");
-        strcat(mkdir_cmd, output_dir_checkpoints);
-        system(mkdir_cmd); // create results/checkpoints dir
-        printf("created checkpoints saving dir: %s\n", mkdir_cmd);
-
+    if (strlen(results_dir) > 0) {
+        entry_settings_save_dir->setText(results_dir);
+        mkdir(results_dir);
+        mkdir(checkpoints_dir);
     }
 
     QObject::connect(toolbutton_settings_select_dir, &QToolButton::clicked,toolbutton_settings_select_dir, [&]() { 
@@ -487,23 +482,14 @@ int main(int argc, char *argv[]) {
 
             // save new output dir
             entry_settings_save_dir->setText(filepath);
-            strcpy(output_dir,filepath);
+            strcpy(results_dir,filepath);
 #ifdef _WIN32
-            path_to_windows_path(output_dir);
+            path_to_windows_path(results_dir);
 #endif
-            printf("selected dir = %s\n", output_dir);
-
             // save new checkpoints dir
-            strcpy(output_dir_checkpoints, output_dir);
-            strcat(output_dir_checkpoints,"/checkpoints");
-#ifdef _WIN32
-            path_to_windows_path(output_dir_checkpoints);
-#endif
-            char mkdir_cmd[MAX_URL_LEN] = {0}; 
-            strcat(mkdir_cmd, "mkdir ");
-            strcat(mkdir_cmd, output_dir_checkpoints);
-            system(mkdir_cmd); // create checkpoints dir
-            printf("selected checkpoints dir = %s\n", output_dir_checkpoints);
+            strcpy(checkpoints_dir, results_dir);
+            strcat(checkpoints_dir,DEFAULT_PATH_SEPARATOR"checkpoints");
+            mkdir(checkpoints_dir);
         });
 
     entry_request_delay = w->findChild<QLineEdit*>("entry_request_delay");
@@ -521,25 +507,21 @@ int main(int argc, char *argv[]) {
     /* ========= proxy settings ======= */
     entry_proxy_url = w->findChild<QLineEdit*>("entry_proxy_url");
     QObject::connect(entry_proxy_url, &QLineEdit::textChanged,entry_proxy_url, []() { 
-        strcpy(proxy_url,  entry_proxy_url->text().toStdString().c_str());
+        strcpy(proxy_url,  to_cstr(entry_proxy_url->text()));
         trim(proxy_url);
-        printf("new proxy_url = %s\n",proxy_url);
     });
     
     entry_proxy_username = w->findChild<QLineEdit*>("entry_proxy_username");
     QObject::connect(entry_proxy_username, &QLineEdit::textChanged,entry_proxy_username, []() { 
-        strcpy(proxy_username,  entry_proxy_username->text().toStdString().c_str());
+        strcpy(proxy_username,  to_cstr(entry_proxy_username->text()));
         trim(proxy_username);
-        printf("new proxy_username = %s\n",proxy_username);
     });
 
     entry_proxy_password = w->findChild<QLineEdit*>("entry_proxy_password");
     QObject::connect(entry_proxy_password, &QLineEdit::textChanged,entry_proxy_password, []() { 
-        strcpy(proxy_password,  entry_proxy_password->text().toStdString().c_str());
+        strcpy(proxy_password,  to_cstr(entry_proxy_password->text()));
         trim(proxy_password);
-        printf("new proxy_password = %s\n",proxy_password);
     });
-
 
     /* =============================================== */
 

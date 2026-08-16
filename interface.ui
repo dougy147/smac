@@ -139,7 +139,7 @@
        <bool>true</bool>
       </property>
      </widget>
-     <widget class="QPushButton" name="button_reset_to_first_mac">
+     <widget class="QPushButton" name="button_reset_checkpoint">
       <property name="geometry">
        <rect>
         <x>380</x>
@@ -209,7 +209,7 @@
      <attribute name="title">
       <string>Settings</string>
      </attribute>
-     <widget class="QLineEdit" name="settings_first_mac">
+     <widget class="QLineEdit" name="settings_mac_first">
       <property name="geometry">
        <rect>
         <x>150</x>
@@ -245,7 +245,7 @@
        <string>Last MAC</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="settings_last_mac">
+     <widget class="QLineEdit" name="settings_mac_last">
       <property name="geometry">
        <rect>
         <x>150</x>

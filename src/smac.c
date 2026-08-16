@@ -48,7 +48,7 @@ const char *tz       = "Europe/Amsterdam";
 void write_account_to_save_file(char *mac, char *exp_date) {
     if (AUTO_SAVE_ACCOUNTS) {
         char save_path[MAX_URL_LEN*2] = {0};
-        snprintf(save_path,sizeof(save_path),"%s/%s",output_dir,output_filename_accounts);
+        snprintf(save_path,sizeof(save_path),"%s/%s",results_dir,accounts_filename);
         FILE *f = fopen(save_path,"a");
         if (ACCOUNTS_COUNT == 0) {
             fprintf(f,"%s\n",host);
@@ -63,7 +63,7 @@ void write_account_to_save_file(char *mac, char *exp_date) {
 void write_checkpoint(char *mac) {
     if (USE_CHECKPOINTS && SCAN_MODE == SEQUENTIAL) {
         char save_path[MAX_URL_LEN*2] = {0};
-        snprintf(save_path,sizeof(save_path),"%s/%s",output_dir_checkpoints,output_filename_checkpoints);
+        snprintf(save_path,sizeof(save_path),"%s/%s",checkpoints_dir,checkpoint_filename);
         FILE *f = fopen(save_path,"w");
         fprintf(f,"%s",mac);
         fclose(f);

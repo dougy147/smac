@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>533</width>
-    <height>627</height>
+    <height>631</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -101,7 +101,7 @@
       <property name="geometry">
        <rect>
         <x>50</x>
-        <y>170</y>
+        <y>190</y>
         <width>421</width>
         <height>171</height>
        </rect>
@@ -111,7 +111,7 @@
       <property name="geometry">
        <rect>
         <x>180</x>
-        <y>370</y>
+        <y>390</y>
         <width>131</width>
         <height>51</height>
        </rect>
@@ -158,11 +158,17 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>150</x>
-        <y>110</y>
-        <width>201</width>
-        <height>41</height>
+        <x>120</x>
+        <y>100</y>
+        <width>279</width>
+        <height>53</height>
        </rect>
+      </property>
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
       </property>
       <property name="font">
        <font>
@@ -171,6 +177,31 @@
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QProgressBar" name="busy_indicator">
+      <property name="geometry">
+       <rect>
+        <x>120</x>
+        <y>150</y>
+        <width>279</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Maximum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="cursor">
+       <cursorShape>WaitCursor</cursorShape>
+      </property>
+      <property name="maximum">
+       <number>0</number>
+      </property>
+      <property name="value">
+       <number>-1</number>
       </property>
      </widget>
     </widget>

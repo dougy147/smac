@@ -14,6 +14,7 @@
 #include <QCheckBox>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QProgressBar>
 
 #include <unistd.h>
 
@@ -24,6 +25,7 @@
 /* Qt interface stuff */
     /* main scan tab */
 QLineEdit        *label_mac; // was a label is now lineedit disabled
+QProgressBar     *busy_indicator;
 QPushButton      *button_reset_to_first_mac;
 QLineEdit        *entry_server_url;
 QListView        *accounts_listview;
@@ -336,6 +338,12 @@ int main(int argc, char *argv[]) {
     label_mac = w->findChild<QLineEdit*>("label_mac");
     label_mac->setText(mac_first);
 
+    /* busy indicator (just a progress bar with no number)*/
+    busy_indicator = w->findChild<QProgressBar*>("busy_indicator");
+    busy_indicator->setVisible(SCANNING);
+
+    /* reset check point button */
+
     button_reset_to_first_mac = w->findChild<QPushButton*>("button_reset_to_first_mac");
 
     QObject::connect(button_reset_to_first_mac, &QPushButton::clicked, button_reset_to_first_mac, [&]() { 
@@ -379,6 +387,7 @@ int main(int argc, char *argv[]) {
         if (!SCANNING) start_scanning_user();
         else           stop_scanning_user();
         SCANNING = !SCANNING;
+        busy_indicator->setVisible(SCANNING);
         GUI_update_scanning_labels(mac);
     });
     

@@ -155,6 +155,11 @@ void update_output_filename_from_url(char *output_filename, char *url) {
     output_filename[i] = '\0';
 }
 
+void clean_accounts_listview() {
+    accounts_listview_model->removeRows(0, accounts_listview_model->rowCount());
+    accounts_listview->setModel(accounts_listview_model);
+}
+
 bool update_server_url() {
 
     char new_host[MAX_URL_LEN] = {0};
@@ -162,18 +167,14 @@ bool update_server_url() {
     strcpy(new_host,entry_server_url->text().toStdString().c_str());
 
     trim(new_host);
+
+    if (strcmp(host,new_host) == 0) return false;
+    
     strcpy(host,new_host);
 
-    if (strcmp(host,host_previous) == 0) return false;
-    
     //TODO: Check if it is a correct URL
-    update_output_filename_from_url(output_filename_accounts, host);
-    update_output_filename_from_url(output_filename_checkpoints, host);
-
     printf("[i] Updated 'entry_server_url' from \"%s\" to \"%s\"\n", host_previous, host);
-    printf("[i] Updated 'output_filename' = \"%s\"\n", output_filename_accounts);
 
-    strcpy(host_previous,host);
     return true;
 }
 
@@ -239,14 +240,37 @@ void start_scanning_user() {
     import_settings();
 
     bool url_updated = update_server_url();
+    
     if (url_updated) {
+
+        // prompt user for unsaved accounts if no autosave setting AND found valid accounts
+        if (!AUTO_SAVE_ACCOUNTS && ACCOUNTS_COUNT > 0) {
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::question(button_scan, "Clear accounts?", "You are about to perform a new scan. Accounts in the list are not saved and will be deleted. Proceed?", QMessageBox::Yes|QMessageBox::No);
+            if (reply == QMessageBox::No) {
+                strcpy(host,host_previous);
+                printf("rolling back to previous host: %s\n",host);
+                return;
+            }
+        }
+        
         MAC_COUNT = 0;
+        ACCOUNTS_COUNT = 0;
         strcpy(mac,mac_first); // for sequential mode
+        clean_accounts_listview();
     }
+
+    strcpy(host_previous,host);
+
+    update_output_filename_from_url(output_filename_accounts, host);
+    update_output_filename_from_url(output_filename_checkpoints, host);
+    printf("[i] 'output_filename' = \"%s\"\n", output_filename_accounts);
     
     load_checkpoint();
     entry_server_url->setEnabled(false);
 
+    SCANNING = true;
+    printf("scanning is %d\n", SCANNING);
     GRACEFUL_EXIT_ASKED = false; // cf below
     pthread_create(&main_thread, NULL, &start, NULL);
     button_scan->setText("Stop");
@@ -271,6 +295,7 @@ void stop_scanning_user() {
     
     button_scan->setText("Start");
     entry_server_url->setEnabled(true);
+    SCANNING = false;
 }
 
 int main(int argc, char *argv[]) {
@@ -316,10 +341,6 @@ int main(int argc, char *argv[]) {
     /* Host/Server_URL entry text (QLineEdit for now) */
     entry_server_url = w->findChild<QLineEdit*>("server_url");
     entry_server_url->setText(host);
-    QObject::connect(entry_server_url, &QLineEdit::textChanged,entry_server_url, []() { 
-        update_server_url();
-        load_checkpoint();
-    });
 
 
     /* Radio Buttons (sequential, random, mac file?) */
@@ -386,7 +407,6 @@ int main(int argc, char *argv[]) {
     QObject::connect(button_scan, &QPushButton::clicked, w, [&]() { 
         if (!SCANNING) start_scanning_user();
         else           stop_scanning_user();
-        SCANNING = !SCANNING;
         busy_indicator->setVisible(SCANNING);
         GUI_update_scanning_labels(mac);
     });

@@ -15,6 +15,8 @@
 #define STR_MAC_LEN MAC_LEN + 5 + 1
 
 #include "shared.h"
+#include "utils.c"
+#include "proxies.c"
 //char host[MAX_URL_LEN] = "http://localhost:8008";
 //char mac[STR_MAC_LEN]  = "00:1A:79:00:00:00";
 
@@ -89,7 +91,8 @@ void encode_mac(char *encoded_mac, char *mac) {
 
 #include "write_callback_declarations.h"
 
-void make_request(char *url, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
+void make_request(char *url, char *mac, struct curl_slist *headers, UserProxy *proxy, int max_retry, int thread_index) {
+
     CURL *curl = curl_easy_init();
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -98,7 +101,8 @@ void make_request(char *url, char *mac, struct curl_slist *headers, UserProxy *p
 
     //curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)3);
     //curl_easy_setopt(curl, CURLOPT_SERVER_RESPONSE_TIMEOUT, (long)3);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)request_timeout);
+    //curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)request_timeout / 1000);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)request_timeout); // this is in milliseconds
 
     curl_easy_setopt(curl, CURLOPT_PROXY, proxy->url);
     curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, proxy->username);
@@ -107,35 +111,75 @@ void make_request(char *url, char *mac, struct curl_slist *headers, UserProxy *p
 #include "write_callback_calls.h"
 
     CURLcode res = curl_easy_perform(curl);
+    long response_code;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+    
+    // TODO: check if error 23 is normal to us (because we use our own callback function)
+    //       For now we consider it to be normal behaviour 
+    if (res != CURLE_OK && res != 23) {
 
-    if (res == 3) {
-        // TODO: This is a ill-formatted URL, we should stop scanning IMMEDIATELY
-        fprintf(stderr,"[w] Stopping current scan: invalid host URL \"%s\"\n",host);
-        GRACEFUL_EXIT_ASKED = true;
-    }
-    if (res == 6) {
-        fprintf(stderr,"[w] Stopping current scan: could not resolve host URL.\n");
-        GRACEFUL_EXIT_ASKED = true;
-    }
-    if (res == 28) {
-        // TODO: recheck this MAC again
-        CURL_TIMEOUTS_COUNT++;
-        if (CURL_TIMEOUTS_COUNT >= NB_THREADS) {
-            fprintf(stderr,"[w] Stopping current scan: %ds timeout reached for %d out of %d threads.\n", request_timeout, CURL_TIMEOUTS_COUNT, NB_THREADS);
+        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        
+        if (res == 3) {
+            // TODO: This is a ill-formatted URL, we should stop scanning IMMEDIATELY
+            fprintf(stderr,"[!] Malformed server URL \"%s\"\n",host);
+            GRACEFUL_EXIT_ASKED = true;
+        }
+        
+        else if (res == 6) {
+            fprintf(stderr,"[!] Could not resolve host URL.\n");
+            GRACEFUL_EXIT_ASKED = true;
+        }
+        
+        else if (res == 28) {
+            printf("[i] Operation timed out.\n");
+
+            if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
+                get_next_proxy(PROXY_MANUAL_URL);
+                // TODO check if made one full rotation
+                make_request(url, mac, headers, proxy, max_retry, thread_index);
+                return;
+                
+            } else {
+                
+                if (max_retry > 0) {
+                    make_request(url, mac, headers, proxy, max_retry-1, thread_index);
+                    return;
+                }
+                
+                fprintf(stderr,"[!] Timeout limit reached.\n");
+                GRACEFUL_EXIT_ASKED = true;
+            }
+
+        }
+        
+        else if (res == 5) {
+            if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
+                fprintf(stderr,"[i] Cannot resolve proxy \"%s\". Rotating.\n", proxy->url);
+                get_next_proxy(PROXY_MANUAL_URL);
+                // TODO check if made one full rotation
+                make_request(url, mac, headers, proxy, MAX_REQUESTS_RETRY, thread_index);
+                return;
+            } else {
+                fprintf(stderr,"[!] Could not resolve proxy \"%s\".\n", proxy->url);
+                GRACEFUL_EXIT_ASKED = true;
+            }
+        }
+
+        else {
+            if (max_retry == 0) {
+                fprintf(stderr,"[!] Max retry limit reached.\n");
+                GRACEFUL_EXIT_ASKED = true;
+            } else if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
+                make_request(url, mac, headers, proxy, max_retry, thread_index);
+                return;
+            } else {
+                make_request(url, mac, headers, proxy, max_retry-1, thread_index);
+                return;
+            }
         }
     }
-    if (res == 5) {
-        fprintf(stderr,"[w] STOP REQUESTED: curl could not resolve proxy \"%s\".\n", proxy->url);
-        GRACEFUL_EXIT_ASKED = true;
-    }
-    // if (res > 0 && res != 23) {
-    //     // error 23 is """normal""" for us since we have changed the callback function
-    //     fprintf(stderr,"[w] Stopping current scan: curl return %d exit code.\n", res);
-    //     GRACEFUL_EXIT_ASKED = true;
-    // }
     
-    //TODO: handle other useful exit codes (timeouts, empty answers, etc.)
-    //printf("mac = %s ; index = %d ; response[] = <<<%s>>>\n", mac, thread_index,responses[thread_index]);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 }
@@ -171,18 +215,78 @@ void parse_pattern(char *dst, char *pattern, char *response) {
     }
 }
 
+void lower_string(char *str) {
+    for (int i=0;i<strlen(str);i++) {
+        str[i] = tolower(str[i]);
+    }
+}
+
+bool match_pattern(char *pattern, char *text) {
+    char *s = text;
+    while (s[0] != '\0') {
+        if (strncmp(pattern,s,strlen(pattern)) == 0) return true;
+        s++;
+    }
+    return false;
+}
+
 void handshake(char *token, char *url_path, char *host, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
     char url[MAX_URL_LEN];
     snprintf(url,sizeof(url),url_path,host,mac);
-    make_request(url,mac,headers,proxy,thread_index);
+    make_request(url,mac,headers,proxy,MAX_REQUESTS_RETRY,thread_index);
     parse_pattern(token,(char *)"\"token\"",responses[thread_index]);
 }
 
 void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
     char url[MAX_URL_LEN];
     snprintf(url,sizeof(url),url_path,host,mac);
-    make_request(url,mac,headers,proxy,thread_index);
+    make_request(url,mac,headers,proxy,MAX_REQUESTS_RETRY,thread_index);
     parse_pattern(exp_date,(char *)"\"phone\"",responses[thread_index]);
+}
+
+void study_reponse(char *response) {
+    /* Here we check what the server answered and act accordingly */
+    // access refusals
+    
+    const char *refusal_patterns[] = {
+        "forbidden", "unauthorized", "too many", "429", "access denied", "denied",
+        "security", "blocking", "blocked", "not allowed", "reset", "overflow",
+        "<html>", "maximum", "reached", "error", "disconnect", "invalid",
+        "credential", "autoproxy", "timeout",
+    };
+
+    lower_string(response);
+
+    for (int i=0;i<sizeof(refusal_patterns)/sizeof(refusal_patterns[0]);i++) {
+
+        bool matched = match_pattern((char *)refusal_patterns[i],response);
+        if (matched) {
+            // server refuses you
+            if (USE_PROXY && (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL)) {
+                printf("[i] Rotating proxy: server blocks you (response contains \"%s...\")\n",refusal_patterns[i]);
+                get_next_proxy(PROXY_MANUAL_URL);
+                return;
+            }
+            fprintf(stderr,"[!] Stopping scan: server blocks you: %s\n", refusal_patterns[i]);
+            GRACEFUL_EXIT_ASKED = true;
+            return;
+        }
+    }
+
+    // other errors
+    if (strlen(response) == 0) {
+        if (USE_PROXY && (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL)) {
+            printf("[i] Rotating proxy: the server provides empty replies\n");
+            get_next_proxy(PROXY_MANUAL_URL);
+            return;
+        }
+        fprintf(stderr,"[!] Stopping scan: the server provides empty replies\n1");
+        GRACEFUL_EXIT_ASKED = true;
+        return;
+    }
+    //printf("TODO: investigate why it went wrong");
+    printf("response = <<<%s>>>\n",response);
+    // else it is just empty token or exp_date
 }
 
 //bool check(char *host, char *mac) {
@@ -215,6 +319,7 @@ void *check(void *thread_args) {
     handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, &proxy, args.thread_index);
 
     if (strlen(token) == 0) {
+        study_reponse(responses[args.thread_index]);
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
         pthread_exit(NULL);
@@ -238,6 +343,7 @@ void *check(void *thread_args) {
     get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,&proxy,args.thread_index);
    
     if (strlen(exp_date) == 0) {
+        study_reponse(responses[args.thread_index]);
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
         pthread_exit(NULL);
@@ -369,11 +475,21 @@ void *start(void *_) {
                     threads_args[j].mac_index = j;
 
                     // prepare proxy
-                    UserProxy proxy = {
-                        .url = proxy_url,
-                        .username = proxy_username,
-                        .password = proxy_password,
-                    };
+                    UserProxy proxy = {0};
+                    
+                    if (USE_PROXY) {
+                        // NOTE: atm we use PROXY_MANUAL_URL as variable holder
+                        //       for the proxy to use even when in PROXY_FILE mode.
+                        //       Note that username and password are specifically
+                        //       reserved for MANUAL settings. TODO reword this
+                        //       comment and fix this ambiguity
+                        proxy.url = PROXY_MANUAL_URL;
+
+                        if (PROXY_MODE == MANUAL) {
+                            proxy.username = PROXY_MANUAL_USERNAME;
+                            proxy.password = PROXY_MANUAL_PASSWORD;
+                        }
+                    }
 
                     threads_args[j].proxy = &proxy; 
 

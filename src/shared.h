@@ -5,9 +5,20 @@
 #define MAX_EXP_LEN 128
 #define MAX_TOKEN_LEN 128
 
+#define MAX_PATH_LEN 256
+
 #define MAX_PROXY_SETTINGS_LEN 128
 
 #define THREADS_LIMIT 32
+
+#ifdef _WIN32
+#define DEFAULT_RESULTS_DIR "..\\results"
+#define DEFAULT_PATH_SEPARATOR "\\"
+#else
+#define DEFAULT_RESULTS_DIR "./results"
+#define DEFAULT_PATH_SEPARATOR "/"
+#endif
+
 int NB_THREADS = 1; // user defined
 
 char host[MAX_URL_LEN] = "http://localhost:8008";
@@ -24,13 +35,26 @@ char mac_prefix[STR_MAC_LEN] = "00:1A:79";
 bool AUTO_SAVE_ACCOUNTS = true;
 bool USE_CHECKPOINTS    = true;
 
-#ifdef _WIN32
-#define DEFAULT_RESULTS_DIR "..\\results"
-#define DEFAULT_PATH_SEPARATOR "\\"
-#else
-#define DEFAULT_RESULTS_DIR "./results"
-#define DEFAULT_PATH_SEPARATOR "/"
-#endif
+bool USE_PROXY          = false;
+// https://curl.se/libcurl/c/CURLOPT_PROXY.html
+char PROXY_MANUAL_URL[MAX_URL_LEN] = {0}; // if empty no proxy will be used even if declared in our make_request function
+// note that it is also recommended to specify the port directly in the proxy_url
+char PROXY_MANUAL_USERNAME[MAX_PROXY_SETTINGS_LEN] = {0};
+char PROXY_MANUAL_PASSWORD[MAX_PROXY_SETTINGS_LEN] = {0};
+char PROXY_FILE_FILEPATH[MAX_PATH_LEN]  = {0};
+//char PROXY_FILE_URL[MAX_URL_LEN] = {0};
+char PROXY_FILE_URL[MAX_URL_LEN] = "https://raw.githubusercontent.com/stormsia/proxy-list/main/http.txt";
+
+enum {
+    NONE,
+    MANUAL,
+    FROM_FILE,
+    FROM_URL,
+} Proxy_Mode;
+
+int PROXY_MODE = NONE;
+
+int MAX_REQUESTS_RETRY = 2;
 
 char results_dir[MAX_URL_LEN] = DEFAULT_RESULTS_DIR;
 char checkpoints_dir[MAX_URL_LEN] = DEFAULT_RESULTS_DIR DEFAULT_PATH_SEPARATOR "checkpoints";
@@ -51,11 +75,7 @@ typedef struct {
     char *password;
 } UserProxy; // curl already took Proxy
 
-// https://curl.se/libcurl/c/CURLOPT_PROXY.html
-char proxy_url[MAX_URL_LEN] = {0}; // if empty no proxy will be used even if declared in our make_request function
-// note that it is also recommended to specify the port directly in the proxy_url
-char proxy_username[MAX_PROXY_SETTINGS_LEN] = {0};
-char proxy_password[MAX_PROXY_SETTINGS_LEN] = {0};
+
 
 enum {
     SEQUENTIAL,
@@ -72,16 +92,16 @@ bool GRACEFUL_EXIT_ASKED = false;
 // it is necessary, so everything is prepared
 // just in case ;)
 
-//#ifdef __cplusplus
-//extern "C" {
-//#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 void GUI_update_scanning_labels(const char*);
 void GUI_add_account_to_accounts_list(const char*,const char*);
 void GUI_scan_ended_by_itself(void);
 
-//#ifdef __cplusplus
-//}
-//#endif
+// #ifdef __cplusplus
+// }
+// #endif
 
 #endif // SMAC_SHARED_H

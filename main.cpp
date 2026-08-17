@@ -14,6 +14,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QProgressBar>
+#include <QFrame>
 
 #include <unistd.h>
 
@@ -45,12 +46,29 @@ QLineEdit   *entry_request_delay;
 QLineEdit   *entry_request_timeout;
 QLineEdit   *entry_pause_nb;
 QLineEdit   *entry_pause_duration;
-QLineEdit   *entry_proxy_url;
-QLineEdit   *entry_proxy_username;
-QLineEdit   *entry_proxy_password;
+/*proxy settings*/
+
+QCheckBox    *checkbox_use_proxy;
+QFrame       *frame_proxy;
+QLineEdit    *entry_manual_proxy_url;
+QLineEdit    *entry_manual_proxy_username;
+QLineEdit    *entry_manual_proxy_password;
+QRadioButton *radio_button_proxy_manual;
+QRadioButton *radio_button_proxy_file;
+QRadioButton *radio_button_proxy_file_url;
+QLabel       *label_manual_proxy_url;
+QLabel       *label_manual_proxy_username;
+QLabel       *label_manual_proxy_password;
+QLabel       *label_file_proxy;
+QToolButton  *toolbutton_file_proxy;
+QToolButton  *toolbutton_file_url_proxy;
+QLineEdit    *entry_file_proxy;
+QLineEdit    *entry_file_url_proxy;
+
 
 #include "src/smac.c"
 #include "src/shared.h"
+#include "src/utils.c"
 
 pthread_t main_thread;
 
@@ -64,16 +82,18 @@ pthread_t main_thread;
     else printf("[w] Invalid or absent default value provided for global variable \"" #NAME "\"\n"); \
     QObject::connect(entry_##NAME, &QLineEdit::textChanged,entry_##NAME, []() {  \
         NAME = entry_##NAME->text().toInt(); \
-    });
+    })
 
-#define yesno(QOBJECT,TITLE,MESSAGE) \
+#define yesnobox(PARENT,TITLE,MESSAGE) \
     QMessageBox::StandardButton reply; \
-    reply = QMessageBox::question((QOBJECT), (TITLE), (MESSAGE), QMessageBox::Yes|QMessageBox::No);
+    reply = QMessageBox::question((PARENT), (TITLE), (MESSAGE), QMessageBox::Yes|QMessageBox::No)
+    
+#define okbox(PARENT,TITLE,MESSAGE) \
+    QMessageBox::information((PARENT), (TITLE), (MESSAGE), QMessageBox::Ok)
 
 #define to_cstr(QSTRING) \
     (char*)(QSTRING).toLocal8Bit().constData()
         
-//extern "C" void GUI_update_scanning_labels(const char *mac)
 void GUI_update_scanning_labels(const char *mac)
 {
     const QString mac_str = QString::fromUtf8(mac);
@@ -94,7 +114,6 @@ void GUI_update_scanning_labels(const char *mac)
     }
 }
 
-//extern "C" void GUI_add_account_to_accounts_list(const char *mac, const char *exp_date)
 void GUI_add_account_to_accounts_list(const char *mac, const char *exp_date)
 {
     char account[STR_MAC_LEN + MAX_EXP_LEN];
@@ -110,52 +129,42 @@ void GUI_add_account_to_accounts_list(const char *mac, const char *exp_date)
 }
 
 void GUI_scan_ended_by_itself() {
-    // update stuff related to a scan not running
-    GRACEFUL_EXIT_ASKED = false;
+
     QMetaObject::invokeMethod(button_scan, []() {
+        button_scan->setEnabled(false);
+        GRACEFUL_EXIT_ASKED = false;
         button_scan->setText("Start");
-    }, Qt::QueuedConnection); 
-
-    QMetaObject::invokeMethod(entry_server_url, []() {
         entry_server_url->setEnabled(true);
+        busy_indicator->setVisible(false);
+        button_scan->setEnabled(true);
+        SCANNING = false;
     }, Qt::QueuedConnection); 
-}
 
-bool is_whitespace(char c) {
-    const char *ws = " \t\n\r";
-    while (ws[0] != '\0') if (c == *ws++) return true;
-    return false;
-}
-
-void trim(char *s) {
-    char *p = s;
-    int l = strlen(s);
-    while (p[0] != '\0' && is_whitespace(p[0])) p++;
-    for (int i=0;i<=l-(p-s);i++) s[i] = s[i+(p-s)];
-    while (l-1 >= 0 && is_whitespace(s[l-1])) l--;
-    s[l] = '\0';
-}
-
-void path_to_windows_path(char *path) {
-    char *p = path;
-    char win_path[MAX_URL_LEN] = {0};
-    while (p[0] != '\0') {
-        if (strlen(win_path) == MAX_URL_LEN) {
-            // TODO: properly alert user we are not changing the path because of this:
-            printf("[!] Could not convert to Windows path: buffer overflow, path too long");
-            strcpy(win_path,path);
-            break;
-        }
-        if (p[0] == '/') {
-            win_path[strlen(win_path)] = '\\';
-            win_path[strlen(win_path)] = '\\';
-        } else {
-            win_path[strlen(win_path)] = p[0];
-        }
-        p++;
-    }
-    win_path[strlen(win_path)] = '\0';
-    strcpy(path,win_path);
+    //////////////////////////////
+    
+    //QMetaObject::invokeMethod(button_scan, []() {
+    //   button_scan->setEnabled(false);
+    //}, Qt::QueuedConnection); 
+    //
+    ////update stuff related to a scan not running
+    //GRACEFUL_EXIT_ASKED = false;
+    //
+    //QMetaObject::invokeMethod(button_scan, []() {
+    //   button_scan->setText("Start");
+    //}, Qt::QueuedConnection); 
+    //
+    //QMetaObject::invokeMethod(entry_server_url, []() {
+    //   entry_server_url->setEnabled(true);
+    //}, Qt::QueuedConnection);
+    //
+    //QMetaObject::invokeMethod(busy_indicator, []() {
+    //   busy_indicator->setVisible(false);
+    //}, Qt::QueuedConnection);
+    //
+    //QMetaObject::invokeMethod(button_scan, []() {
+    //    button_scan->setEnabled(true);
+    //    SCANNING = false;
+    //}, Qt::QueuedConnection); 
 }
 
 void mkdir(char *path) {
@@ -250,13 +259,15 @@ void remove_checkpoint(char *server) {
 }
 
 void start_scanning_user() {
+    button_scan->setEnabled(false);
+    
     load_settings();
     
     bool url_changed = server_url_changed();
     if (url_changed) {
 
         if (!AUTO_SAVE_ACCOUNTS && ACCOUNTS_COUNT > 0) {
-            yesno(button_scan, "Clear accounts?", "Accounts in the list are not saved and will be deleted by a new scan. Proceed?");
+            yesnobox(button_scan, "Clear accounts?", "Accounts in the list are not saved and will be deleted by a new scan. Proceed?");
             if (reply == QMessageBox::No) return;
         }
         
@@ -275,21 +286,26 @@ void start_scanning_user() {
     entry_server_url->setEnabled(false);
 
     SCANNING = true;
-    printf("scanning is %d\n", SCANNING);
     GRACEFUL_EXIT_ASKED = false; // cf below
+    
     pthread_create(&main_thread, NULL, &start, NULL);
+    
     button_scan->setText("Stop");
+    button_scan->setEnabled(true);
 }
 
 void stop_scanning_user() {
-    if (main_thread <= 0) {
-        return;
-    }
-    GRACEFUL_EXIT_ASKED = true; // cf below
-    pthread_cancel(main_thread); // does nothing on windows
+    button_scan->setEnabled(false);
     
     if (main_thread > 0) {
-        pthread_join(main_thread, NULL); //// wait for thread to finish
+        
+        GRACEFUL_EXIT_ASKED = true; // cf below
+        pthread_cancel(main_thread); // does nothing on windows
+        
+        if (main_thread > 0) {
+            pthread_join(main_thread, NULL); //// wait for thread to finish
+        }
+        
     }
 
 #ifndef _WIN32
@@ -300,8 +316,54 @@ void stop_scanning_user() {
     
     button_scan->setText("Start");
     entry_server_url->setEnabled(true);
+    busy_indicator->setVisible(false);
     SCANNING = false;
+
+    button_scan->setEnabled(true);
 }
+
+
+/////////////////////////////////////////////////////////////////////////////////
+
+// https://curl.se/libcurl/c/url2file.html
+static size_t write_to_file_from_url(char *ptr, size_t size, size_t nmemb, void *stream)
+{
+  size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
+  return written;
+}
+ 
+int download_proxy_file_from_url(char *filename, char *url) {
+    // TODO: do we want to download those permanently in a ./proxies dir
+    //       or keep doingn something temporary like this
+    
+    CURLcode result;
+    CURL *curl;
+    
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L); // no progress meter
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_to_file_from_url);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)5000);
+    
+    FILE *f = fopen(filename, "wb");
+    
+    if(f) {
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+        result = curl_easy_perform(curl);
+        fclose(f);
+    } else {
+        //okbox(toolbutton_file_url_proxy,"Error","Could not download proxy list to computer");
+        fprintf(stderr,"[!] could not open file \"%s\"\n",filename);
+    }
+    
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+
+    return (int)result;
+}
+
+/////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
     
@@ -376,7 +438,7 @@ int main(int argc, char *argv[]) {
     button_reset_checkpoint = w->findChild<QPushButton*>("button_reset_checkpoint");
 
     QObject::connect(button_reset_checkpoint, &QPushButton::clicked, button_reset_checkpoint, [&]() {
-        yesno(button_reset_checkpoint,"Reset checkpoint","Reset checkpoint for that host?");
+        yesnobox(button_reset_checkpoint,"Reset checkpoint","Reset checkpoint for that host?");
 
         if (reply == QMessageBox::Yes) {
             //char server_cstr[MAX_URL_LEN] = {0};
@@ -413,7 +475,7 @@ int main(int argc, char *argv[]) {
 
     // [&]() is a lambda that captures everything by reference (so you can mention previous code)
     // else []()   does not capture
-    QObject::connect(button_scan, &QPushButton::clicked, w, [&]() { 
+    QObject::connect(button_scan, &QPushButton::clicked, w, [&]() {
         if (!SCANNING) start_scanning_user();
         else           stop_scanning_user();
         busy_indicator->setVisible(SCANNING);
@@ -505,23 +567,190 @@ int main(int argc, char *argv[]) {
     entry_of_int(pause_duration);
 
     /* ========= proxy settings ======= */
-    entry_proxy_url = w->findChild<QLineEdit*>("entry_proxy_url");
-    QObject::connect(entry_proxy_url, &QLineEdit::textChanged,entry_proxy_url, []() { 
-        strcpy(proxy_url,  to_cstr(entry_proxy_url->text()));
-        trim(proxy_url);
-    });
+    checkbox_use_proxy = w->findChild<QCheckBox*>("checkbox_use_proxy");
+    frame_proxy = w->findChild<QFrame*>("frame_proxy");
+    frame_proxy->setEnabled(USE_PROXY);
+    frame_proxy->setVisible(USE_PROXY);
     
-    entry_proxy_username = w->findChild<QLineEdit*>("entry_proxy_username");
-    QObject::connect(entry_proxy_username, &QLineEdit::textChanged,entry_proxy_username, []() { 
-        strcpy(proxy_username,  to_cstr(entry_proxy_username->text()));
-        trim(proxy_username);
+    radio_button_proxy_manual   = w->findChild<QRadioButton*>("radio_button_proxy_manual"); // this on is checked by default
+    radio_button_proxy_file     = w->findChild<QRadioButton*>("radio_button_proxy_file");
+    radio_button_proxy_file_url = w->findChild<QRadioButton*>("radio_button_proxy_file_url");
+
+    QObject::connect(checkbox_use_proxy, &QCheckBox::toggled, w, [&]() {
+        USE_PROXY = !USE_PROXY;
+        frame_proxy->setEnabled(USE_PROXY);
+        frame_proxy->setVisible(USE_PROXY);
+        
+        radio_button_proxy_manual->setEnabled(USE_PROXY);
+        radio_button_proxy_file->setEnabled(USE_PROXY);
+        radio_button_proxy_file_url->setEnabled(USE_PROXY);
+
+        if (USE_PROXY) {
+            PROXY_MODE = MANUAL;
+        } else {
+            PROXY_MODE = NONE;
+        }
+        
     });
 
-    entry_proxy_password = w->findChild<QLineEdit*>("entry_proxy_password");
-    QObject::connect(entry_proxy_password, &QLineEdit::textChanged,entry_proxy_password, []() { 
-        strcpy(proxy_password,  to_cstr(entry_proxy_password->text()));
-        trim(proxy_password);
+    //radio_button_proxy_manual->setChecked(true); // this is the default selection if user uses
+    label_manual_proxy_url = w->findChild<QLabel*>("label_manual_proxy_url");
+    entry_manual_proxy_url = w->findChild<QLineEdit*>("entry_manual_proxy_url");
+    QObject::connect(entry_manual_proxy_url, &QLineEdit::textChanged,entry_manual_proxy_url, []() { 
+        strcpy(PROXY_MANUAL_URL,  to_cstr(entry_manual_proxy_url->text()));
+        trim(PROXY_MANUAL_URL);
     });
+
+    label_manual_proxy_username = w->findChild<QLabel*>("label_manual_proxy_username");
+    entry_manual_proxy_username = w->findChild<QLineEdit*>("entry_manual_proxy_username");
+    QObject::connect(entry_manual_proxy_username, &QLineEdit::textChanged,entry_manual_proxy_username, []() { 
+        strcpy(PROXY_MANUAL_USERNAME,  to_cstr(entry_manual_proxy_username->text()));
+        trim(PROXY_MANUAL_USERNAME);
+    });
+    
+    label_manual_proxy_password = w->findChild<QLabel*>("label_manual_proxy_password");
+    entry_manual_proxy_password = w->findChild<QLineEdit*>("entry_manual_proxy_password");
+    QObject::connect(entry_manual_proxy_password, &QLineEdit::textChanged,entry_manual_proxy_password, []() { 
+        strcpy(PROXY_MANUAL_PASSWORD,  to_cstr(entry_manual_proxy_password->text()));
+        trim(PROXY_MANUAL_PASSWORD);
+    });
+
+    label_file_proxy = w->findChild<QLabel*>("label_file_proxy");
+    toolbutton_file_proxy = w->findChild<QToolButton*>("toolbutton_file_proxy");
+    entry_file_proxy = w->findChild<QLineEdit*>("entry_file_proxy");
+
+    if (strlen(PROXY_FILE_FILEPATH) > 0) {
+        entry_file_proxy->setText(PROXY_FILE_FILEPATH);
+    }
+
+    QObject::connect(toolbutton_file_proxy, &QToolButton::clicked,toolbutton_file_proxy, [&]() { 
+            const QString f = QFileDialog::getOpenFileName();
+            char filepath[MAX_PATH_LEN];
+            strcpy(filepath,f.toLocal8Bit().constData());
+
+            if (strlen(filepath) == 0) return;
+
+            // save new output dir
+            entry_file_proxy->setText(filepath);
+#ifdef _WIN32
+            path_to_windows_path(PROXY_FILE_FILEPATH);
+#endif
+
+            strcpy(PROXY_FILE_FILEPATH,filepath);
+
+            // testing
+            bool ok = import_proxy_file(PROXY_FILE_FILEPATH);
+            if (ok) {
+                get_next_proxy(PROXY_MANUAL_URL);
+                printf("current proxy url = %s\n",PROXY_MANUAL_URL);
+            }
+        });
+
+    toolbutton_file_url_proxy = w->findChild<QToolButton*>("toolbutton_file_url_proxy");
+    entry_file_url_proxy = w->findChild<QLineEdit*>("entry_file_url_proxy");
+    entry_file_url_proxy->setText(PROXY_FILE_URL);
+    
+    QObject::connect(toolbutton_file_url_proxy, &QToolButton::clicked,toolbutton_file_url_proxy, [&]() { 
+
+        char url[MAX_URL_LEN];
+        strcpy(url,to_cstr(entry_file_url_proxy->text()));
+        trim(url);
+      
+        // download the file from that URL and use it as proxy file
+        if (strlen(url) > 0) {
+            strcpy(PROXY_FILE_URL,url);
+
+            // create temporary file to receive it
+            char temp[MAX_PATH_LEN] = "." DEFAULT_PATH_SEPARATOR "get-proxies.txt";
+            int res = download_proxy_file_from_url(temp, PROXY_FILE_URL);
+            if (res != 0) {
+                okbox(toolbutton_file_url_proxy,"Error","Could not download proxy list");
+                fprintf(stderr,"[!] could not download from \"%s\" curl returned %d\n", PROXY_FILE_URL, res);
+            } else {
+                bool ok = import_proxy_file(temp);
+                if (ok) {
+                    get_next_proxy(PROXY_MANUAL_URL);
+                    printf("current proxy url = %s\n",PROXY_MANUAL_URL);
+                    // TODO check proxy is valid somewhere in the code
+                    okbox(toolbutton_file_url_proxy,"Proxy list imported","Successfully imported proxy list");
+                } else {
+                    okbox(toolbutton_file_url_proxy,"Error","No proxy found in provided list");
+                }
+
+#ifdef _WIN32
+                DeleteFileA(temp);
+#else
+                unlink(temp);
+#endif
+                
+            }
+        }
+    });
+
+    // CONNECT RADIO BUTTONS HERE
+    QObject::connect(radio_button_proxy_manual, &QRadioButton::clicked,radio_button_proxy_manual, [&]() { 
+        // enables stuff
+        label_manual_proxy_url->setEnabled(true);
+        entry_manual_proxy_url->setEnabled(true);
+        label_manual_proxy_username->setEnabled(true);
+        entry_manual_proxy_username->setEnabled(true);
+        label_manual_proxy_password ->setEnabled(true);
+        entry_manual_proxy_password->setEnabled(true);
+
+        // disables stuff
+        label_file_proxy->setEnabled(false);
+        toolbutton_file_proxy->setEnabled(false);
+        //entry_file_proxy->setEnabled(false);
+        toolbutton_file_url_proxy->setEnabled(false);
+        entry_file_url_proxy->setEnabled(false);
+
+        PROXY_MODE = MANUAL;
+        
+    });
+
+    QObject::connect(radio_button_proxy_file, &QRadioButton::clicked,radio_button_proxy_file, [&]() { 
+        // enables stuff
+        label_file_proxy->setEnabled(true);
+        toolbutton_file_proxy->setEnabled(true);
+        //entry_file_proxy->setEnabled(true);
+        
+        
+        // disables stuff
+        label_manual_proxy_url->setEnabled(false);
+        entry_manual_proxy_url->setEnabled(false);
+        label_manual_proxy_username->setEnabled(false);
+        entry_manual_proxy_username->setEnabled(false);
+        label_manual_proxy_password->setEnabled(false);
+        entry_manual_proxy_password->setEnabled(false);
+
+        toolbutton_file_url_proxy->setEnabled(false);
+        entry_file_url_proxy->setEnabled(false);
+
+        PROXY_MODE = FROM_FILE;
+    });
+
+    QObject::connect(radio_button_proxy_file_url, &QRadioButton::clicked,radio_button_proxy_file_url, [&]() { 
+        // enables stuff
+        toolbutton_file_url_proxy->setEnabled(true);
+        entry_file_url_proxy->setEnabled(true); 
+        
+        // disables stuff
+        label_manual_proxy_url->setEnabled(false);
+        entry_manual_proxy_url->setEnabled(false);
+        label_manual_proxy_username->setEnabled(false);
+        entry_manual_proxy_username->setEnabled(false);
+        label_manual_proxy_password->setEnabled(false);
+        entry_manual_proxy_password->setEnabled(false);
+        label_file_proxy->setEnabled(false);
+        toolbutton_file_proxy->setEnabled(false);
+        //entry_file_proxy->setEnabled(false);
+
+        PROXY_MODE = FROM_URL;
+    });    
+
+
+
+
 
     /* =============================================== */
 

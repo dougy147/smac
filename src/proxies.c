@@ -19,18 +19,30 @@ bool import_proxy_file(char *filepath) {
 
     int fd = open(filepath,O_RDONLY);
     
-    proxy_file.init = (char*)mmap(NULL, MAX_FILE_SIZE, PROT_READ, MAP_PRIVATE , fd, 0);
-    
     if (fd < 0) {
         fprintf(stderr,"[!] could not open proxy file \"%s\"\n",filepath);
         return false;
     }
 
-    if (strlen(proxy_file.init) == 0) {
+
+    // Assert file size > 0 else mmap will segfault
+    FILE *stream = fdopen(fd,"r");
+    fseek(stream, 0L, SEEK_END);
+    long size = ftell(stream);
+    if (size <= 0) {
+        fprintf(stderr,"[!] proxy file \"%s\" has empty file size\n",filepath);
+        fclose(stream);
+        return false;
+    }
+    rewind(stream);
+
+    proxy_file.init = (char*)mmap(NULL, MAX_FILE_SIZE, PROT_READ, MAP_PRIVATE , fd, 0);
+
+    if (proxy_file.init == NULL) {
         fprintf(stderr,"[!] proxy file \"%s\" is empty\n",filepath);
         return false;
     }
-    
+
     proxy_file.cur = proxy_file.init;
     close(fd);
     return true;

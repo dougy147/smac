@@ -73,9 +73,7 @@ typedef struct {
     char *url;
     char *username;
     char *password;
-} UserProxy; // curl already took Proxy
-
-
+} User_Proxy; // curl already took Proxy
 
 enum {
     SEQUENTIAL,
@@ -85,6 +83,15 @@ enum {
 int SCAN_MODE = SEQUENTIAL;
 bool SCANNING = false;
 bool GRACEFUL_EXIT_ASKED = false;
+
+typedef struct {
+    char *host;
+    char *mac_first;
+    char *mac_last;
+    int scan_mode;
+    int proxy_mode;
+    User_Proxy proxy;
+} Scan_Session;
 
 // this is to avoid crashes updating the GUI
 // maybe we also should ensure C++ does not 

@@ -32,8 +32,9 @@ windows-mingw64: prepare main.cpp CMakeLists.txt
 windows-sendbuild:
 	rsync -hurtPl . win11:Desktop/main-sendbuild \
 		--exclude={.git*,3rd/curl-8.21.0{,*zip,*gz},release,build}
+	ssh win11 "cd ./Desktop/main-sendbuild; make windows"
 
 prepare:
-	@rm -rf ./build 2>/dev/null
+	#@rm -rf ./build 2>/dev/null
 	@mkdir -p ./build
 	@mkdir -p ./release/{linux,windows/{,src}}

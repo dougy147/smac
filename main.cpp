@@ -1,3 +1,5 @@
+#define SMAC_GUI 1
+
 #include <QApplication>
 #include <QWidget>
 #include <QtUiTools/QUiLoader>
@@ -65,12 +67,9 @@ QToolButton  *toolbutton_file_url_proxy;
 QLineEdit    *entry_file_proxy;
 QLineEdit    *entry_file_url_proxy;
 
-
 #include "src/smac.c"
 #include "src/shared.h"
 #include "src/utils.c"
-
-pthread_t main_thread;
 
 // https://runebook.dev/en/docs/qt/qleinteger/QLEInteger
 // given an int variable name, ensure its associated entry_ will only allow integers in
@@ -129,7 +128,7 @@ void GUI_add_account_to_accounts_list(const char *mac, const char *exp_date)
 }
 
 void GUI_scan_ended_by_itself() {
-
+    // attaching to 'button_scan' seems to work
     QMetaObject::invokeMethod(button_scan, []() {
         button_scan->setEnabled(false);
         GRACEFUL_EXIT_ASKED = false;
@@ -139,69 +138,14 @@ void GUI_scan_ended_by_itself() {
         button_scan->setEnabled(true);
         SCANNING = false;
     }, Qt::QueuedConnection); 
-
-    //////////////////////////////
-    
-    //QMetaObject::invokeMethod(button_scan, []() {
-    //   button_scan->setEnabled(false);
-    //}, Qt::QueuedConnection); 
-    //
-    ////update stuff related to a scan not running
-    //GRACEFUL_EXIT_ASKED = false;
-    //
-    //QMetaObject::invokeMethod(button_scan, []() {
-    //   button_scan->setText("Start");
-    //}, Qt::QueuedConnection); 
-    //
-    //QMetaObject::invokeMethod(entry_server_url, []() {
-    //   entry_server_url->setEnabled(true);
-    //}, Qt::QueuedConnection);
-    //
-    //QMetaObject::invokeMethod(busy_indicator, []() {
-    //   busy_indicator->setVisible(false);
-    //}, Qt::QueuedConnection);
-    //
-    //QMetaObject::invokeMethod(button_scan, []() {
-    //    button_scan->setEnabled(true);
-    //    SCANNING = false;
-    //}, Qt::QueuedConnection); 
 }
 
-void mkdir(char *path) {
-    char mkdir_cmd[MAX_URL_LEN] = {0};
-    strcat(mkdir_cmd, "mkdir ");
-#ifdef _WIN32
-    path_to_windows_path(path);
-#endif
-    strcat(mkdir_cmd, path);
-    system(mkdir_cmd);
-}
-
-void build_filename_from_url(char *filename, char *url, const char *extension) {
-    // copy sanitized substring of URL + extension into filename
-    trim(url);
-    const char *http = "http://";
-    const char *https = "https://";
-
-    int i = 0;
-    while (*url != '\0') {
-        if (strncmp(url,http,strlen(http)) == 0)   url+=strlen(http);
-        if (strncmp(url,https,strlen(https)) == 0) url+=strlen(https);
-        filename[i++] = url[0];
-        url++;
-        if (*url == '/') break;
-    }
-
-    while (extension[0] != '\0') filename[i++] = extension++[0];
-    filename[i] = '\0';
-}
-
-void clean_accounts_listview() {
+void GUI_clean_accounts_listview() {
     accounts_listview_model->removeRows(0, accounts_listview_model->rowCount());
     accounts_listview->setModel(accounts_listview_model);
 }
 
-bool server_url_changed() {
+bool GUI_server_url_changed() {
     char new_host[MAX_URL_LEN] = {0};
     strcpy(new_host,to_cstr(entry_server_url->text()));
     trim(new_host);
@@ -209,8 +153,8 @@ bool server_url_changed() {
     return true;
 }
 
-void update_server_url() {
-    if (!server_url_changed) return;
+void GUI_update_server_url() {
+    if (!GUI_server_url_changed) return;
     
     char new_host[MAX_URL_LEN] = {0};
     strcpy(new_host,to_cstr(entry_server_url->text()));
@@ -218,52 +162,19 @@ void update_server_url() {
     strcpy(host,new_host);
 }
 
-void load_settings() {
+void GUI_load_settings() {
+    strcpy(host     ,  to_cstr(entry_server_url->text()));
     strcpy(mac_first,  to_cstr(entry_settings_mac_first->text()));
     strcpy(mac_last,   to_cstr(entry_settings_mac_last->text()));
     strcpy(mac_prefix, to_cstr(entry_settings_mac_prefix->text()));
 }
 
-void load_checkpoint(char *server) {
-
-    char checkpoint_path[MAX_URL_LEN] = {0};
-    build_filename_from_url(checkpoint_filename, server, ".txt");
-    
-    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",checkpoints_dir,checkpoint_filename);
-    
-    FILE *f = fopen(checkpoint_path,"r");
-    if (f) {
-        char last_checkpoint[STR_MAC_LEN] = {0};
-        fread (last_checkpoint, 1, STR_MAC_LEN, f);
-        strcpy(mac_first,last_checkpoint);
-        fclose(f);
-    } else {
-        label_mac->setText(mac_first);
-    }
-
-
-    if (SCAN_MODE == SEQUENTIAL) {
-        label_mac->setText(mac_first);
-        strcpy(mac,mac_first);
-    }
-}
-
-void remove_checkpoint(char *server) {
-    char path[MAX_URL_LEN] = {0};
-    snprintf(path,sizeof(path),"%s/%s",checkpoints_dir,checkpoint_filename);
-#ifdef _WIN32
-        DeleteFileA(path);
-#else
-        unlink(path);
-#endif
-}
-
-void start_scanning_user() {
+void GUI_scan_start() {
     button_scan->setEnabled(false);
     
-    load_settings();
-    
-    bool url_changed = server_url_changed();
+    GUI_load_settings();
+
+    bool url_changed = GUI_server_url_changed();
     if (url_changed) {
 
         if (!AUTO_SAVE_ACCOUNTS && ACCOUNTS_COUNT > 0) {
@@ -271,30 +182,24 @@ void start_scanning_user() {
             if (reply == QMessageBox::No) return;
         }
         
-        update_server_url();
+        GUI_update_server_url();
         MAC_COUNT = 0;
         ACCOUNTS_COUNT = 0;
         strcpy(mac,mac_first); // for sequential mode
-        clean_accounts_listview();
+        GUI_clean_accounts_listview();
     }
 
     strcpy(host_previous,host);
-
-    build_filename_from_url(accounts_filename,   host, ".txt");
-    //build_filename_from_url(checkpoint_filename, host, ".txt");
-    if (USE_CHECKPOINTS) load_checkpoint(host);
-    entry_server_url->setEnabled(false);
-
-    SCANNING = true;
-    GRACEFUL_EXIT_ASKED = false; // cf below
     
-    pthread_create(&main_thread, NULL, &start, NULL);
-    
+    label_mac->setText(mac_first);
+    entry_server_url->setEnabled(false);    
     button_scan->setText("Stop");
     button_scan->setEnabled(true);
+
+    smac_main();
 }
 
-void stop_scanning_user() {
+void GUI_scan_stop() {
     button_scan->setEnabled(false);
     
     if (main_thread > 0) {
@@ -322,48 +227,6 @@ void stop_scanning_user() {
     button_scan->setEnabled(true);
 }
 
-
-/////////////////////////////////////////////////////////////////////////////////
-
-// https://curl.se/libcurl/c/url2file.html
-static size_t write_to_file_from_url(char *ptr, size_t size, size_t nmemb, void *stream)
-{
-  size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
-  return written;
-}
- 
-int download_proxy_file_from_url(char *filename, char *url) {
-    // TODO: do we want to download those permanently in a ./proxies dir
-    //       or keep doingn something temporary like this
-    
-    CURLcode result;
-    CURL *curl;
-    
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L); // no progress meter
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_to_file_from_url);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)5000);
-    
-    FILE *f = fopen(filename, "wb");
-    
-    if(f) {
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
-        result = curl_easy_perform(curl);
-        fclose(f);
-    } else {
-        //okbox(toolbutton_file_url_proxy,"Error","Could not download proxy list to computer");
-        fprintf(stderr,"[!] could not open file \"%s\"\n",filename);
-    }
-    
-    curl_easy_cleanup(curl);
-    curl_global_cleanup();
-
-    return (int)result;
-}
-
-/////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
     
@@ -400,7 +263,7 @@ int main(int argc, char *argv[]) {
 
     QAction *menu_quit = w->findChild<QAction*>("actionQuit");
     QObject::connect(menu_quit, &QAction::triggered, menu_quit, [&]() {
-            app.exit();
+        app.exit();
     });
 
     /* ============== MAIN SCAN TAB =================== */
@@ -418,11 +281,11 @@ int main(int argc, char *argv[]) {
     radio_button_random     = w->findChild<QRadioButton*>("radio_button_random");
 
     QObject::connect(radio_button_sequential, &QRadioButton::clicked,radio_button_sequential, [&]() { 
-            SCAN_MODE = SEQUENTIAL;
+        SCAN_MODE = SEQUENTIAL;
     });
     
     QObject::connect(radio_button_random, &QRadioButton::clicked,radio_button_random, [&]() { 
-            SCAN_MODE = RANDOM;
+        SCAN_MODE = RANDOM;
     });
 
     /* Current MAC scanned label */
@@ -459,7 +322,7 @@ int main(int argc, char *argv[]) {
     }
 
     QObject::connect(thread_combobox, &QComboBox::activated,thread_combobox, [&]() { 
-            NB_THREADS = thread_combobox->currentIndex() + 1;
+        NB_THREADS = thread_combobox->currentIndex() + 1;
     });
 
     /* ListView */
@@ -476,8 +339,8 @@ int main(int argc, char *argv[]) {
     // [&]() is a lambda that captures everything by reference (so you can mention previous code)
     // else []()   does not capture
     QObject::connect(button_scan, &QPushButton::clicked, w, [&]() {
-        if (!SCANNING) start_scanning_user();
-        else           stop_scanning_user();
+        if (!SCANNING) GUI_scan_start();
+        else           GUI_scan_stop();
         busy_indicator->setVisible(SCANNING);
         GUI_update_scanning_labels(mac);
     });
@@ -622,28 +485,14 @@ int main(int argc, char *argv[]) {
     if (strlen(PROXY_FILE_FILEPATH) > 0) {
         entry_file_proxy->setText(PROXY_FILE_FILEPATH);
     }
-
+    
     QObject::connect(toolbutton_file_proxy, &QToolButton::clicked,toolbutton_file_proxy, [&]() { 
             const QString f = QFileDialog::getOpenFileName();
             char filepath[MAX_PATH_LEN];
             strcpy(filepath,f.toLocal8Bit().constData());
-
             if (strlen(filepath) == 0) return;
-
-            // save new output dir
             entry_file_proxy->setText(filepath);
-#ifdef _WIN32
-            path_to_windows_path(PROXY_FILE_FILEPATH);
-#endif
-
-            strcpy(PROXY_FILE_FILEPATH,filepath);
-
-            // testing
-            bool ok = import_proxy_file(PROXY_FILE_FILEPATH);
-            if (ok) {
-                get_next_proxy(PROXY_MANUAL_URL);
-                printf("current proxy url = %s\n",PROXY_MANUAL_URL);
-            }
+            init_proxy_from_file(filepath);
         });
 
     toolbutton_file_url_proxy = w->findChild<QToolButton*>("toolbutton_file_url_proxy");
@@ -655,35 +504,11 @@ int main(int argc, char *argv[]) {
         char url[MAX_URL_LEN];
         strcpy(url,to_cstr(entry_file_url_proxy->text()));
         trim(url);
-      
-        // download the file from that URL and use it as proxy file
-        if (strlen(url) > 0) {
-            strcpy(PROXY_FILE_URL,url);
-
-            // create temporary file to receive it
-            char temp[MAX_PATH_LEN] = "." DEFAULT_PATH_SEPARATOR "get-proxies.txt";
-            int res = download_proxy_file_from_url(temp, PROXY_FILE_URL);
-            if (res != 0) {
-                okbox(toolbutton_file_url_proxy,"Error","Could not download proxy list");
-                fprintf(stderr,"[!] could not download from \"%s\" curl returned %d\n", PROXY_FILE_URL, res);
-            } else {
-                bool ok = import_proxy_file(temp);
-                if (ok) {
-                    get_next_proxy(PROXY_MANUAL_URL);
-                    printf("current proxy url = %s\n",PROXY_MANUAL_URL);
-                    // TODO check proxy is valid somewhere in the code
-                    okbox(toolbutton_file_url_proxy,"Proxy list imported","Successfully imported proxy list");
-                } else {
-                    okbox(toolbutton_file_url_proxy,"Error","No proxy found in provided list");
-                }
-
-#ifdef _WIN32
-                DeleteFileA(temp);
-#else
-                unlink(temp);
-#endif
-                
-            }
+        bool ok = init_proxy_from_url(url);
+        if (ok) {
+            okbox(toolbutton_file_url_proxy,"Proxy list imported","Successfully imported proxy list");
+        } else {
+            okbox(toolbutton_file_url_proxy,"Error","No proxy found in provided list");
         }
     });
 

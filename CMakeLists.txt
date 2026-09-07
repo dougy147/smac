@@ -21,7 +21,8 @@ target_link_libraries(main-windows PRIVATE
     Qt6::Widgets 
     Qt6::UiTools 
     Qt6::OpenGL
-    C:/users/nerd/Desktop/smac2/3rd/curl-8.21.0_6-win64-mingw/lib/libcurl.dll.a
+    #C:/users/nerd/Desktop/smac2/3rd/curl-8.21.0_6-win64-mingw/lib/libcurl.dll.a
+    C:/users/nerd/Desktop/main-sendbuild/3rd/curl-8.21.0_6-win64-mingw/lib/libcurl.dll.a
 )
 
 

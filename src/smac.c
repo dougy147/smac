@@ -1,8 +1,12 @@
-/* NOTE: I want to keep this smac.c program in pure C */
+/* NOTE:
+    this is the cli version of smac (similar to good old mcbash)
+    written in "pure C" it is used by main.cpp
+*/
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include <curl/curl.h>
 #include <pthread.h>
@@ -17,24 +21,23 @@
 #include "shared.h"
 #include "utils.c"
 #include "proxies.c"
-//char host[MAX_URL_LEN] = "http://localhost:8008";
-//char mac[STR_MAC_LEN]  = "00:1A:79:00:00:00";
 
 int MAC_COUNT = 0;
 int ACCOUNTS_COUNT = 0;
-
-int CURL_TIMEOUTS_COUNT = 0; // if above NB_THREADS, stop scanning
 
 typedef struct {
     int thread_index;
     char *host;
     char *mac;
     int mac_index;
-    UserProxy *proxy;
-} ThreadCheckArgs ;
+    User_Proxy *proxy;
+} Thread_Check_Args ;
 
+pthread_t main_thread;
 pthread_t threads[THREADS_LIMIT] = {0};
-ThreadCheckArgs threads_args[THREADS_LIMIT] = {0};
+Thread_Check_Args threads_args[THREADS_LIMIT] = {0};
+
+Scan_Session session = {0};
 
 char threads_macs[THREADS_LIMIT][12+5+1] = {0};
 
@@ -46,6 +49,82 @@ const char *ua       = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 
 const char *x_ua     = "Model: MAG250; Link: WiFi";
 const char *stb_lang = "en";
 const char *tz       = "Europe/Amsterdam";
+
+void build_session(Scan_Session *s) {
+
+    s->host      = strdup(host);
+    s->mac_first = strdup(mac_first);
+    s->mac_last  = strdup(mac_last);
+    
+    s->scan_mode  = SCAN_MODE;
+    s->proxy_mode = PROXY_MODE;
+
+    // build proxy
+    User_Proxy proxy = {0};
+    if (USE_PROXY) {
+        proxy.url = PROXY_MANUAL_URL;
+        if (PROXY_MODE == MANUAL) {
+            proxy.username = PROXY_MANUAL_USERNAME;
+            proxy.password = PROXY_MANUAL_PASSWORD;
+        }
+    }
+    s->proxy = proxy;
+}
+
+void mkdir(char *path) {
+    char mkdir_cmd[MAX_URL_LEN] = {0};
+    strcat(mkdir_cmd, "mkdir ");
+#ifdef _WIN32
+    path_to_windows_path(path);
+#endif
+    strcat(mkdir_cmd, path);
+    system(mkdir_cmd);
+}
+
+void build_filename_from_url(char *filename, char *url, const char *extension) {
+    // copy sanitized substring of URL + extension into filename
+    trim(url);
+    const char *http = "http://";
+    const char *https = "https://";
+
+    int i = 0;
+    while (*url != '\0') {
+        if (strncmp(url,http,strlen(http)) == 0)   url+=strlen(http);
+        if (strncmp(url,https,strlen(https)) == 0) url+=strlen(https);
+        filename[i++] = url[0];
+        url++;
+        if (*url == '/') break;
+    }
+
+    while (extension[0] != '\0') filename[i++] = extension++[0];
+    filename[i] = '\0';
+}
+
+void load_checkpoint(char *server) {
+
+    char checkpoint_path[MAX_URL_LEN] = {0};
+    build_filename_from_url(checkpoint_filename, server, ".txt");
+    
+    snprintf(checkpoint_path,sizeof(checkpoint_path),"%s/%s",checkpoints_dir,checkpoint_filename);
+    
+    FILE *f = fopen(checkpoint_path,"r");
+    if (f) {
+        char last_checkpoint[STR_MAC_LEN] = {0};
+        fread (last_checkpoint, 1, STR_MAC_LEN, f);
+        strcpy(mac_first,last_checkpoint);
+        fclose(f);
+    }
+}
+
+void remove_checkpoint(char *server) {
+    char path[MAX_URL_LEN] = {0};
+    snprintf(path,sizeof(path),"%s/%s",checkpoints_dir,checkpoint_filename);
+#ifdef _WIN32
+        DeleteFileA(path);
+#else
+        unlink(path);
+#endif
+}
 
 void write_account_to_save_file(char *mac, char *exp_date) {
     if (AUTO_SAVE_ACCOUNTS) {
@@ -91,7 +170,7 @@ void encode_mac(char *encoded_mac, char *mac) {
 
 #include "write_callback_declarations.h"
 
-void make_request(char *url, char *mac, struct curl_slist *headers, UserProxy *proxy, int max_retry, int thread_index) {
+void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *proxy, int max_retry, int thread_index) {
 
     CURL *curl = curl_easy_init();
 
@@ -230,14 +309,14 @@ bool match_pattern(char *pattern, char *text) {
     return false;
 }
 
-void handshake(char *token, char *url_path, char *host, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
+void handshake(char *token, char *url_path, char *host, char *mac, struct curl_slist *headers, User_Proxy *proxy, int thread_index) {
     char url[MAX_URL_LEN];
     snprintf(url,sizeof(url),url_path,host,mac);
     make_request(url,mac,headers,proxy,MAX_REQUESTS_RETRY,thread_index);
     parse_pattern(token,(char *)"\"token\"",responses[thread_index]);
 }
 
-void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct curl_slist *headers, UserProxy *proxy, int thread_index) {
+void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct curl_slist *headers, User_Proxy *proxy, int thread_index) {
     char url[MAX_URL_LEN];
     snprintf(url,sizeof(url),url_path,host,mac);
     make_request(url,mac,headers,proxy,MAX_REQUESTS_RETRY,thread_index);
@@ -285,14 +364,13 @@ void study_reponse(char *response) {
         return;
     }
     //printf("TODO: investigate why it went wrong");
-    printf("response = <<<%s>>>\n",response);
+    //printf("response = <<<%s>>>\n",response);
     // else it is just empty token or exp_date
 }
 
-//bool check(char *host, char *mac) {
 void *check(void *thread_args) {
 
-    ThreadCheckArgs args = *(ThreadCheckArgs*)thread_args;
+    Thread_Check_Args args = *(Thread_Check_Args*)thread_args;
 
     // every variables are local
     // EXCEPT "response"
@@ -312,7 +390,7 @@ void *check(void *thread_args) {
     headers = curl_slist_append(headers,tmp_headers);
 
     // prepare proxy
-    UserProxy proxy = *(UserProxy*)args.proxy;
+    User_Proxy proxy = *(User_Proxy*)args.proxy;
 
     // handshake
     char token[MAX_TOKEN_LEN] = {0};
@@ -352,7 +430,9 @@ void *check(void *thread_args) {
 
     //printf("exp_date: %s\n",exp_date);
     printf("(thread %d) [%d] %s [%s]\n", args.mac_index,MAC_COUNT, args.mac, exp_date);
+#ifdef SMAC_GUI
     GUI_add_account_to_accounts_list(args.mac, exp_date);
+#endif
     write_account_to_save_file(args.mac, exp_date);
     ACCOUNTS_COUNT++;
 
@@ -432,24 +512,119 @@ void compute_next_mac(char *next_mac, char *mac) {
     //else { fprintf(stderr,"[!] ERROR: Unknown SCAN_MODE\n"); }
 }
 
-void *start(void *_) {
+void init_proxy_from_file(char *filepath) {
+    if (strlen(filepath) == 0) return;
+    strcpy(PROXY_FILE_FILEPATH,filepath);
+    
+#ifdef _WIN32
+    path_to_windows_path(PROXY_FILE_FILEPATH);
+#endif
 
-    // NOTE: smac.c knows nothing about wether the host it has been
-    //       passed is valid or not. It checks accoutns, that is all.
+    bool ok = import_proxy_file(PROXY_FILE_FILEPATH);
+    if (ok) {
+        get_next_proxy(PROXY_MANUAL_URL);
+        printf("current proxy url = %s\n",PROXY_MANUAL_URL);
+    } else {
+        fprintf(stderr,"[!] Could not import proxy file");
+    }
 
-    // Initialize threads to 0
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+
+// https://curl.se/libcurl/c/url2file.html
+static size_t write_to_file_from_url(char *ptr, size_t size, size_t nmemb, void *stream)
+{
+  size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
+  return written;
+}
+ 
+int download_proxy_file_from_url(char *filename, char *url) {
+    // TODO: do we want to download those permanently in a ./proxies dir
+    //       or keep doingn something temporary like this
+    
+    CURLcode result;
+    CURL *curl;
+    
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L); // no progress meter
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_to_file_from_url);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)5000);
+    
+    FILE *f = fopen(filename, "wb");
+    
+    if(f) {
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+        result = curl_easy_perform(curl);
+        fclose(f);
+    } else {
+        //okbox(toolbutton_file_url_proxy,"Error","Could not download proxy list to computer");
+        fprintf(stderr,"[!] could not open file \"%s\"\n",filename);
+    }
+    
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+
+    return (int)result;
+}
+
+bool init_proxy_from_url(char *url) {
+    trim(url);
+    
+    // download the file from that URL and use it as proxy file
+    if (strlen(url) > 0) {
+        strcpy(PROXY_FILE_URL,url);
+
+        // create temporary file to receive it
+        char temp[MAX_PATH_LEN] = "." DEFAULT_PATH_SEPARATOR "get-proxies.txt";
+        int res = download_proxy_file_from_url(temp, PROXY_FILE_URL);
+        
+        if (res != 0) {
+            fprintf(stderr,"[!] could not download from \"%s\" curl returned %d\n", PROXY_FILE_URL, res);
+            return false;
+        } else {
+            bool imported = import_proxy_file(temp);
+            if (imported) {
+                get_next_proxy(PROXY_MANUAL_URL);
+                printf("current proxy url = %s\n",PROXY_MANUAL_URL);
+            } else {
+                fprintf(stderr,"[!] No proxy found in provided list");
+            }
+
+#ifdef _WIN32
+            DeleteFileA(temp);
+#else
+            unlink(temp);
+#endif
+            return imported;      
+        }
+    }
+    return false;
+}
+
+void *scan(void *_) {
+    
+    SCANNING = true;
+    GRACEFUL_EXIT_ASKED = false;
+
+    // set proxy url from here once
+    // proxy url must be global because it can be change
+    // from requests threads!
+    if (session.proxy_mode == FROM_FILE) init_proxy_from_file(PROXY_FILE_FILEPATH);
+    if (session.proxy_mode == FROM_URL)  init_proxy_from_url(PROXY_FILE_URL);
+    
     for (int i=0;i<NB_THREADS;i++) threads[i] = 0;
 
-    // Let's loop until stop is asked
-    // TODO: Find a proper way
     while (!GRACEFUL_EXIT_ASKED) {
-
-        //printf("[%d] %s\n",MAC_COUNT, mac);
+        
+#ifdef SMAC_GUI
         GUI_update_scanning_labels(mac);
-
+#endif
+        
         // NOTE: We proceed by batch. Simultaneaous requests are
-        // started AND stopped together. THis is incidentally useful
-        // to reset the CURL_TIMEOUTS_COUNT variable.
+        // started AND stopped together.
         if (THREADS_COUNT >= NB_THREADS) {
             //empty the queue
             for (int j=0;j<NB_THREADS;j++) {
@@ -457,7 +632,6 @@ void *start(void *_) {
                 int ok = pthread_join(threads[j],NULL);
                 if (ok == 0) threads[j] = 0;
             }
-            CURL_TIMEOUTS_COUNT = 0;
         }
 
         // find an empty thread
@@ -466,32 +640,15 @@ void *start(void *_) {
             for (int j=0;j<NB_THREADS;j++) {
                 if (threads[j] == 0) {
                     threads_args[j].thread_index = j;
-                    threads_args[j].host = host;
+                    threads_args[j].host = session.host;
 
-                    strcpy(threads_macs[j],mac);
+                    strcpy(threads_macs[j],mac); // mac is a global var
                     threads_args[j].mac = threads_macs[j];
 
-                    //threads_args[j].mac = next_mac();
                     threads_args[j].mac_index = j;
 
                     // prepare proxy
-                    UserProxy proxy = {0};
-                    
-                    if (USE_PROXY) {
-                        // NOTE: atm we use PROXY_MANUAL_URL as variable holder
-                        //       for the proxy to use even when in PROXY_FILE mode.
-                        //       Note that username and password are specifically
-                        //       reserved for MANUAL settings. TODO reword this
-                        //       comment and fix this ambiguity
-                        proxy.url = PROXY_MANUAL_URL;
-
-                        if (PROXY_MODE == MANUAL) {
-                            proxy.username = PROXY_MANUAL_USERNAME;
-                            proxy.password = PROXY_MANUAL_PASSWORD;
-                        }
-                    }
-
-                    threads_args[j].proxy = &proxy; 
+                    threads_args[j].proxy = &session.proxy; 
 
                     int ok = pthread_create(&threads[j], NULL, check, &threads_args[j]);
                     if (ok == 0) {
@@ -510,7 +667,11 @@ void *start(void *_) {
         MAC_COUNT++;
 
         if (pause_nb > 0 && MAC_COUNT % pause_nb == 0) {
+
+#ifdef SMAC_GUI
             GUI_update_scanning_labels("Paused");
+#endif
+
             printf("pausing for %d seconds\n", pause_duration / 1000);
             usleep(pause_duration * 1000); // µ secs
         } else if (request_delay > 0) {
@@ -528,7 +689,41 @@ void *start(void *_) {
 
     //printf("finished");
     GRACEFUL_EXIT_ASKED = false;
-
+    
+#ifdef SMAC_GUI
     GUI_scan_ended_by_itself();
+#endif
+
     return NULL;
+}
+
+void prepare() {
+    
+    build_filename_from_url(accounts_filename,   host, ".txt");
+    
+    if (USE_CHECKPOINTS) {
+        load_checkpoint(host);
+        if (SCAN_MODE == SEQUENTIAL) {
+            strcpy(mac,mac_first);
+        }
+    }
+
+}
+
+#ifdef SMAC_GUI
+void smac_main() { // TODO: pass args from GUI?
+#else
+int main(int argc, char **argv) {
+    // TODO: parse_args();
+#endif
+
+    prepare();
+    build_session(&session);
+    
+    // we now pass a global 'session' to scan() function
+    pthread_create(&main_thread, NULL, &scan, &session);
+
+#ifndef SMAC_GUI
+    return 0;
+#endif
 }

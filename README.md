@@ -32,6 +32,12 @@ $ cd -
 $ make main-windows
 ```
 
+To know which DLLs are mandatory (include them next to .exe):
+
+```console
+$ objdump.exe -p ./release/windows/src/main-windows.exe | grep "DLL Name"
+```
+
 # Sources
 
 - Curl source code (Linux):   https://curl.se/download/curl-8.21.0.tar.gz

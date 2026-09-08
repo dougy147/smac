@@ -1,0 +1,111 @@
+#include <assert.h>
+
+void shift(int *argc, char ***argv) {
+    assert(*argc > 1);
+    *argc-=1;
+    *argv+=1;
+}
+
+#define shift() shift(&argc, &argv);
+
+#define arg_is(ARG,STR) strcmp(ARG,STR) == 0
+
+void parse_args(int argc, char **argv) {
+    char *prog_name = argv[0];
+    
+    while (argc > 1) {
+        shift();
+        
+        char *arg = argv[0];
+        
+        if (arg_is(arg,"-u") || arg_is(arg,"--url")) {
+            shift();
+            strcpy(host, argv[0]);
+        }
+
+        else if (arg_is(arg,"--seq")) {
+            SCAN_MODE = SEQUENTIAL;
+        }
+        
+        else if (arg_is(arg,"-F") || arg_is(arg,"--from")) {
+            shift();
+            strcpy(mac_first, argv[0]);
+        }
+        
+        else if (arg_is(arg,"-L") || arg_is(arg,"--to")) {
+            shift();
+            strcpy(mac_last, argv[0]);
+        }
+
+        else if (arg_is(arg,"-w") || arg_is(arg,"--wait")) {
+            shift();
+            request_delay = atoi(argv[0]);
+        }
+        
+        else if (arg_is(arg,"-t") || arg_is(arg,"--timeout")) {
+            shift();
+            request_timeout = atoi(argv[0]);
+        }
+        
+        else if (arg_is(arg,"-b") || arg_is(arg,"--break")) {
+            shift();
+            pause_nb = atoi(argv[0]);
+        }
+        
+        else if (arg_is(arg,"-d") || arg_is(arg,"--pause-for")) {
+            shift();
+            pause_duration = atoi(argv[0]);
+        }
+
+        else if (arg_is(arg,"-P") || arg_is(arg,"--proxy")) {
+            shift();
+            USE_PROXY = true;
+            if (PROXY_MODE == NONE) PROXY_MODE = MANUAL;
+            strcpy(PROXY_MANUAL_URL,argv[0]);
+        }
+        
+        else if (arg_is(arg,"-Pu") || arg_is(arg,"--proxy-user")) {
+            shift();
+            USE_PROXY = true;
+            if (PROXY_MODE == NONE) PROXY_MODE = MANUAL;
+            strcpy(PROXY_MANUAL_USERNAME,argv[0]);
+        }
+        
+        else if (arg_is(arg,"-Pp") || arg_is(arg,"--proxy-password")) {
+            shift();
+            USE_PROXY = true;
+            if (PROXY_MODE == NONE) PROXY_MODE = MANUAL;
+            strcpy(PROXY_MANUAL_PASSWORD,argv[0]);
+        }
+
+        else if (arg_is(arg,"-Pfile") || arg_is(arg,"--proxy-file")) {
+            shift();
+            USE_PROXY = true;
+            PROXY_MODE = FROM_FILE;
+            strcpy(PROXY_FILE_FILEPATH,argv[0]);
+        }
+
+        else if (arg_is(arg,"-Purl") || arg_is(arg,"--proxy-from-url")) {
+            shift();
+            USE_PROXY = true;
+            PROXY_MODE = FROM_URL;
+            strcpy(PROXY_FILE_URL,argv[0]);
+        }
+        
+        else if (arg_is(arg,"--prefix")) {
+            strcpy(mac_prefix,argv[0]);
+        }
+        
+        else if (arg_is(arg,"--no-checkpoint")) {
+            USE_CHECKPOINTS = false;
+        }
+
+        else if (arg_is(arg,"--threads")) {
+            shift();
+            NB_THREADS = atoi(argv[0]);
+        }
+
+        // to be continued
+        
+    }
+}

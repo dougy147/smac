@@ -394,8 +394,8 @@ int main(int argc, char *argv[]) {
 
     if (strlen(results_dir) > 0) {
         entry_settings_save_dir->setText(results_dir);
-        mkdir(results_dir);
-        mkdir(checkpoints_dir);
+        make_directory(results_dir);
+        make_directory(checkpoints_dir);
     }
 
     QObject::connect(toolbutton_settings_select_dir, &QToolButton::clicked,toolbutton_settings_select_dir, [&]() { 
@@ -414,7 +414,7 @@ int main(int argc, char *argv[]) {
             // save new checkpoints dir
             strcpy(checkpoints_dir, results_dir);
             strcat(checkpoints_dir,DEFAULT_PATH_SEPARATOR"checkpoints");
-            mkdir(checkpoints_dir);
+            make_directory(checkpoints_dir);
         });
 
     entry_request_delay = w->findChild<QLineEdit*>("entry_request_delay");

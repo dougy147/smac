@@ -26,6 +26,10 @@ void parse_args(int argc, char **argv) {
         else if (arg_is(arg,"--seq")) {
             SCAN_MODE = SEQUENTIAL;
         }
+
+        else if (arg_is(arg,"--random")) {
+            SCAN_MODE = RANDOM;
+        }
         
         else if (arg_is(arg,"-F") || arg_is(arg,"--from")) {
             shift();
@@ -103,6 +107,18 @@ void parse_args(int argc, char **argv) {
         else if (arg_is(arg,"--threads")) {
             shift();
             NB_THREADS = atoi(argv[0]);
+        }
+
+        else if (arg_is(arg,"--results-dir")) {
+            shift();
+            strcpy(results_dir,argv[0]);
+            strcpy(checkpoints_dir,results_dir);
+            strcat(checkpoints_dir,DEFAULT_PATH_SEPARATOR "checkpoints");
+        }
+
+        else if (arg_is(arg,"--max-retry")) {
+            shift();
+            MAX_REQUESTS_RETRY = atoi(argv[0]);
         }
 
         // to be continued

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>macbetaaaaaa</string>
+   <string>smac - beta</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QTabWidget" name="tabWidget">
@@ -719,7 +719,7 @@
      </font>
     </property>
     <property name="text">
-     <string>macbeta</string>
+     <string>smac</string>
     </property>
    </widget>
   </widget>

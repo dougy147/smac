@@ -54,7 +54,7 @@ enum {
 
 int PROXY_MODE = NONE;
 
-int MAX_REQUESTS_RETRY = 2;
+int MAX_REQUESTS_RETRY = -1; // disabled if < 0
 
 char results_dir[MAX_URL_LEN] = DEFAULT_RESULTS_DIR;
 char checkpoints_dir[MAX_URL_LEN] = DEFAULT_RESULTS_DIR DEFAULT_PATH_SEPARATOR "checkpoints";

@@ -51,6 +51,11 @@ const char *x_ua     = "Model: MAG250; Link: WiFi";
 const char *stb_lang = "en";
 const char *tz       = "Europe/Amsterdam";
 
+// colors
+char *color_red   = (char*)"\e[;31m";
+char *color_green = (char*)"\e[;32m";
+char *color_reset = (char*)"\e[0m";
+
 void build_session(Scan_Session *s) {
 
     s->host      = strdup(host);
@@ -72,13 +77,18 @@ void build_session(Scan_Session *s) {
     s->proxy = proxy;
 }
 
-void mkdir(char *path) {
+void make_directory(char *path) {
     char mkdir_cmd[MAX_URL_LEN] = {0};
     strcat(mkdir_cmd, "mkdir ");
 #ifdef _WIN32
     path_to_windows_path(path);
 #endif
     strcat(mkdir_cmd, path);
+#ifdef _WIN32
+    strcat(mkdir_cmd, " 2>nul");
+#else
+    strcat(mkdir_cmd, " 2>/dev/null");
+#endif
     system(mkdir_cmd);
 }
 
@@ -133,6 +143,7 @@ void write_account_to_save_file(char *mac, char *exp_date) {
         snprintf(save_path,sizeof(save_path),"%s/%s",results_dir,accounts_filename);
         FILE *f = fopen(save_path,"a");
         if (ACCOUNTS_COUNT == 0) {
+            fprintf(f,"------------------------\n");
             fprintf(f,"%s\n",host);
             fprintf(f,"------------------------\n");
         }
@@ -198,7 +209,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
     //       For now we consider it to be normal behaviour 
     if (res != CURLE_OK && res != 23) {
 
-        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        //fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
         
         if (res == 3) {
             // TODO: This is a ill-formatted URL, we should stop scanning IMMEDIATELY
@@ -212,11 +223,12 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
         }
         
         else if (res == 28) {
-            fprintf(stderr,"[!] Operation timed out.\n");
+            //fprintf(stderr,"[!] Operation timed out.\n");
 
             if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
                 get_next_proxy(PROXY_MANUAL_URL);
                 // TODO check if made one full rotation
+                //printf("rotated to next proxy => %s\n", PROXY_MANUAL_URL);
                 make_request(url, mac, headers, proxy, max_retry, thread_index);
                 return;
                 
@@ -225,17 +237,23 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
                 if (max_retry > 0) {
                     make_request(url, mac, headers, proxy, max_retry-1, thread_index);
                     return;
+               }
+
+                if (MAX_REQUESTS_RETRY >= 0) {
+                    fprintf(stderr,"[!] Timeout limit reached.\n");
+                    GRACEFUL_EXIT_ASKED = true;
+                } else {
+                    // try until it works
+                    make_request(url, mac, headers, proxy, max_retry-1, thread_index);
+                    return;
                 }
-                
-                fprintf(stderr,"[!] Timeout limit reached.\n");
-                GRACEFUL_EXIT_ASKED = true;
             }
 
         }
         
         else if (res == 5) {
             if (PROXY_MODE == FROM_FILE || PROXY_MODE == FROM_URL) {
-                fprintf(stderr,"[!] Cannot resolve proxy \"%s\". Rotating.\n", proxy->url);
+                //fprintf(stderr,"[!] Cannot resolve proxy \"%s\". Rotating.\n", proxy->url);
                 get_next_proxy(PROXY_MANUAL_URL);
                 // TODO check if made one full rotation
                 make_request(url, mac, headers, proxy, MAX_REQUESTS_RETRY, thread_index);
@@ -330,7 +348,7 @@ void study_reponse(char *response) {
     // access refusals
     
     const char *refusal_patterns[] = {
-        "forbidden", "unauthorized", "too many", "429", "access denied", "denied",
+        "forbidden", "unauthorized", "too many", " 429 ", "access denied", "denied",
         "security", "blocking", "blocked", "not allowed", "reset", "overflow",
         "<html>", "maximum", "reached", "error", "disconnect", "invalid",
         "credential", "autoproxy", "timeout",
@@ -362,8 +380,8 @@ void study_reponse(char *response) {
             get_next_proxy(PROXY_MANUAL_URL);
             return;
         }
-        fprintf(stderr,"[!] Stopping scan: the server provides empty replies\n1");
-        GRACEFUL_EXIT_ASKED = true;
+        //fprintf(stderr,"[!] Stopping scan: the server provides empty replies\n");
+        //GRACEFUL_EXIT_ASKED = true;
         return;
     }
     
@@ -382,10 +400,6 @@ void *check(void *thread_args) {
     encode_mac(encoded_mac, args.mac);
 
     //printf("mac = %s ; encoded = %s ; index = %d\n", args.mac, encoded_mac, args.thread_index);
-    char *color_red = "\e[;31m";
-    char *color_green = "\e[;32m";
-    char *color_reset = "\e[0m";
-
     char tmp_headers[MAX_HEADERS_LEN] = {0};
     struct curl_slist *headers = {0};
 
@@ -403,8 +417,12 @@ void *check(void *thread_args) {
     char token[MAX_TOKEN_LEN] = {0};
     handshake(token, (char *)"%s/portal.php?action=handshake&type=stb&token=&mac=%s",args.host, encoded_mac, headers, &proxy, args.thread_index);
 
+    // erase previous line
+    printf("\33[2K\r");
+
     if (strlen(token) == 0) {
-        printf("%s[%d] %s%s\n", color_red, MAC_COUNT, args.mac, color_reset);
+        printf("%s[%d] %s%s", color_red, MAC_COUNT, args.mac, color_reset);
+        fflush(stdout);
         study_reponse(responses[args.thread_index]);
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
@@ -429,7 +447,9 @@ void *check(void *thread_args) {
     get_exp_date(exp_date,(char *)"%s/portal.php?type=account_info&action=get_main_info&mac=%s",args.host,args.mac,headers,&proxy,args.thread_index);
    
     if (strlen(exp_date) == 0) {
-        printf("%s[%d] %s%s\n", color_red, MAC_COUNT, args.mac, color_reset);
+        printf("\33[1K\r"); // remove current line
+        printf("%s[%d] %s [expired]%s", color_red, MAC_COUNT, args.mac, color_reset);
+        fflush(stdout);
         study_reponse(responses[args.thread_index]);
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
@@ -443,6 +463,7 @@ void *check(void *thread_args) {
     GUI_add_account_to_accounts_list(args.mac, exp_date);
 #else
     //printf("(thread %d) [%d] %s [%s]\n", args.mac_index,MAC_COUNT, args.mac, exp_date);
+    printf("\33[1K\r"); // remove current line
     printf("[%d] %s%s%s [%s]\n", MAC_COUNT, color_green, args.mac, color_reset, exp_date);
 #endif
     write_account_to_save_file(args.mac, exp_date);
@@ -451,9 +472,6 @@ void *check(void *thread_args) {
     THREADS_COUNT--;
     threads[args.thread_index] = 0;
     //pthread_exit(NULL);
-
-    // test
-    //printf("\33[2K\r");
     
     return NULL;
 }
@@ -698,12 +716,12 @@ void *scan(void *_) {
 
     }
 
-    printf("finishing threads from within the main\n");
+    //printf("finishing threads from within the main\n");
     for (int i=0;i<NB_THREADS;i++) {
         if (threads[i] > 0) pthread_join(threads[i],NULL);
     }
     THREADS_COUNT = 0;
-    printf("finishing main tthread\n");
+    //printf("finishing main tthread\n");
 
     //printf("finished");
     GRACEFUL_EXIT_ASKED = false;
@@ -717,8 +735,9 @@ void *scan(void *_) {
 
 void prepare() {
 
-    mkdir(results_dir);
-    mkdir(checkpoints_dir);
+    make_directory(results_dir);
+    make_directory(checkpoints_dir);
+    
     build_filename_from_url(accounts_filename,   host, ".txt");
     
     if (USE_CHECKPOINTS) {
@@ -729,7 +748,7 @@ void prepare() {
     }
 
     if (USE_PROXY) {
-        if (PROXY_MODE == FROM_URL)  download_proxy_file_from_url("proxies.txt",PROXY_FILE_URL);
+        if (PROXY_MODE == FROM_URL)  download_proxy_file_from_url((char *)"proxies.txt",PROXY_FILE_URL);
         if (PROXY_MODE == FROM_FILE) init_proxy_from_file(PROXY_FILE_FILEPATH);
     }
 

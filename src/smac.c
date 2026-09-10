@@ -569,7 +569,7 @@ void *check(void *thread_args) {
 
             int ffprobe_timeout = 5; // seconds
 
-            if (match_pattern("http://",host)) {
+            if (match_pattern((char *)"http://",host)) {
                 sprintf(ffprobe_cmd, "ffprobe -timeout %d000000 -loglevel quiet \"%s/play/live.php?mac=%s&stream=%s&extension=ts\"",ffprobe_timeout,host,args.mac,channel_id);
             } else {
                 sprintf(ffprobe_cmd, "ffprobe -timeout %d000000 -loglevel quiet \"http://%s/play/live.php?mac=%s&stream=%s&extension=ts\"",ffprobe_timeout,host,args.mac,channel_id);
@@ -962,9 +962,8 @@ int main(int argc, char **argv) {
     build_session(&session);
 #ifdef SMAC_GUI
     pthread_create(&main_thread, NULL, &scan, &session);
+    return;
 #else
-
-
     scan(&session);
     return 0;
 #endif

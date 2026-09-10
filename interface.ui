@@ -204,6 +204,38 @@
        <number>-1</number>
       </property>
      </widget>
+     <widget class="QRadioButton" name="radio_button_from_file">
+      <property name="geometry">
+       <rect>
+        <x>340</x>
+        <y>60</y>
+        <width>102</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>From file</string>
+      </property>
+      <property name="checked">
+       <bool>false</bool>
+      </property>
+     </widget>
+     <widget class="QToolButton" name="toolbutton_file_mac_file">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
+      <property name="geometry">
+       <rect>
+        <x>420</x>
+        <y>60</y>
+        <width>25</width>
+        <height>25</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>...</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QWidget" name="tab_2">
      <attribute name="title">
@@ -282,7 +314,7 @@
       <property name="geometry">
        <rect>
         <x>330</x>
-        <y>70</y>
+        <y>50</y>
         <width>141</width>
         <height>24</height>
        </rect>
@@ -295,7 +327,7 @@
       <property name="geometry">
        <rect>
         <x>110</x>
-        <y>390</y>
+        <y>410</y>
         <width>79</width>
         <height>26</height>
        </rect>
@@ -305,7 +337,7 @@
       <property name="geometry">
        <rect>
         <x>20</x>
-        <y>390</y>
+        <y>410</y>
         <width>81</width>
         <height>20</height>
        </rect>
@@ -363,7 +395,7 @@
       <property name="geometry">
        <rect>
         <x>330</x>
-        <y>30</y>
+        <y>20</y>
         <width>141</width>
         <height>24</height>
        </rect>
@@ -698,6 +730,68 @@
         <string>File</string>
        </property>
       </widget>
+     </widget>
+     <widget class="QCheckBox" name="checkbox_settings_check_playable">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>460</y>
+        <width>161</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Check if playable</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_15">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>500</y>
+        <width>121</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Genre must match</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="entry_genre_match">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>500</y>
+        <width>121</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="entry_stop_count">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>370</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_16">
+      <property name="geometry">
+       <rect>
+        <x>40</x>
+        <y>370</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Stop count</string>
+      </property>
      </widget>
     </widget>
    </widget>

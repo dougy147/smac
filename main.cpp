@@ -36,6 +36,8 @@ QStringList      *accounts_list;
 QPushButton      *button_scan;
 QRadioButton     *radio_button_sequential;
 QRadioButton     *radio_button_random;
+QRadioButton     *radio_button_from_file;
+QToolButton      *toolbutton_file_mac_file;
     /* settings tab */
 QLineEdit   *entry_settings_mac_first;
 QLineEdit   *entry_settings_mac_last;
@@ -48,6 +50,9 @@ QLineEdit   *entry_request_delay;
 QLineEdit   *entry_request_timeout;
 QLineEdit   *entry_pause_nb;
 QLineEdit   *entry_pause_duration;
+QLineEdit   *entry_stop_count;
+QLineEdit   *entry_genre_match;
+QCheckBox   *checkbox_settings_check_playable;
 /*proxy settings*/
 
 QCheckBox    *checkbox_use_proxy;
@@ -105,6 +110,7 @@ void GUI_update_scanning_labels(const char *mac)
     if (SCANNING) {
         QMetaObject::invokeMethod(label_mac, [mac_str]() {
             label_mac->setText(mac_str);
+            button_scan->setText("Stop");
         }, Qt::QueuedConnection);
     } else {
         QMetaObject::invokeMethod(label_mac, []() {
@@ -120,9 +126,9 @@ void GUI_add_account_to_accounts_list(const char *mac, const char *exp_date)
     const QString account_str = QString::fromUtf8(account);
 
     QMetaObject::invokeMethod(label_mac, [account_str]() {
-            accounts_list->append(account_str);
-            // Don't forget to update the model StringList ptr
-            accounts_listview_model->setStringList(*accounts_list);
+        accounts_list->append(account_str);
+        // Don't forget to update the model StringList ptr
+        accounts_listview_model->setStringList(*accounts_list);
     }, Qt::QueuedConnection);
 
 }
@@ -196,6 +202,7 @@ void GUI_scan_start() {
     button_scan->setText("Stop");
     button_scan->setEnabled(true);
 
+    // must be last call of current func to avoid blocking
     smac_main();
 }
 
@@ -277,16 +284,40 @@ int main(int argc, char *argv[]) {
 
 
     /* Radio Buttons (sequential, random, mac file?) */
-    radio_button_sequential = w->findChild<QRadioButton*>("radio_button_sequential");
-    radio_button_random     = w->findChild<QRadioButton*>("radio_button_random");
+    radio_button_sequential  = w->findChild<QRadioButton*>("radio_button_sequential");
+    radio_button_random      = w->findChild<QRadioButton*>("radio_button_random");
+    radio_button_from_file   = w->findChild<QRadioButton*>("radio_button_from_file");
+    toolbutton_file_mac_file = w->findChild<QToolButton*>("toolbutton_file_mac_file");
 
     QObject::connect(radio_button_sequential, &QRadioButton::clicked,radio_button_sequential, [&]() { 
         SCAN_MODE = SEQUENTIAL;
+        toolbutton_file_mac_file->setEnabled(false);
     });
     
     QObject::connect(radio_button_random, &QRadioButton::clicked,radio_button_random, [&]() { 
         SCAN_MODE = RANDOM;
+        toolbutton_file_mac_file->setEnabled(false);
     });
+
+    QObject::connect(radio_button_from_file, &QRadioButton::clicked,radio_button_from_file, [&]() { 
+        SCAN_MODE = FROM_FILE;
+        toolbutton_file_mac_file->setEnabled(true);
+    });
+
+    QObject::connect(toolbutton_file_mac_file, &QToolButton::clicked,toolbutton_file_mac_file, [&]() { 
+        const QString f = QFileDialog::getOpenFileName();
+        char filepath[128];
+        strcpy(filepath,f.toLocal8Bit().constData());
+
+        if (strlen(filepath) == 0) return;
+
+        // save new output dir
+        strcpy(MAC_FILE_FILEPATH,filepath);
+#ifdef _WIN32
+        path_to_windows_path(MAC_FILE_FILEPATH);
+#endif
+    });
+
 
     /* Current MAC scanned label */
     label_mac = w->findChild<QLineEdit*>("label_mac");
@@ -428,6 +459,37 @@ int main(int argc, char *argv[]) {
 
     entry_pause_duration = w->findChild<QLineEdit*>("entry_pause_duration");
     entry_of_int(pause_duration);
+
+    entry_stop_count = w->findChild<QLineEdit*>("entry_stop_count");
+
+    QIntValidator* validator_entry_stop_count = new QIntValidator(-1, 3600000, entry_stop_count);
+    entry_stop_count->setValidator(validator_entry_stop_count);
+    if (MAX_MAC_COUNT >= -1) entry_stop_count->setText(QString::number(MAX_MAC_COUNT));
+    QObject::connect(entry_stop_count, &QLineEdit::textChanged,entry_stop_count, []() {
+        MAX_MAC_COUNT = entry_stop_count->text().toInt();
+    });
+
+
+    checkbox_settings_check_playable  = w->findChild<QCheckBox*>("checkbox_settings_check_playable");
+    if (CHECK_PLAYABLE) {
+        checkbox_settings_check_playable->setChecked(true);
+    }
+    
+    QObject::connect(checkbox_settings_check_playable, &QCheckBox::toggled, w, [&]() {
+        CHECK_PLAYABLE = !CHECK_PLAYABLE;
+    });
+
+    entry_genre_match = w->findChild<QLineEdit*>("entry_genre_match");
+    QObject::connect(entry_genre_match, &QLineEdit::textChanged,entry_genre_match, []() { 
+        strcpy(GENRE_PATTERN,  to_cstr(entry_genre_match->text()));
+        trim(GENRE_PATTERN);
+        if (strlen(GENRE_PATTERN) > 0) {
+            CHECK_GENRE_MATCH = true;
+        } else {
+            CHECK_GENRE_MATCH = false;
+        }
+    });
+
 
     /* ========= proxy settings ======= */
     checkbox_use_proxy = w->findChild<QCheckBox*>("checkbox_use_proxy");

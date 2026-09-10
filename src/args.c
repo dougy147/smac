@@ -132,6 +132,16 @@ void parse_args(int argc, char **argv) {
             MAX_MAC_COUNT = atoi(argv[0]);
         }
 
+        else if (arg_is(arg,"--genre-regex")) {
+            // TODO: change name: this is not a regex!!!
+            shift();
+            CHECK_GENRE_MATCH = true;
+            strcpy(GENRE_PATTERN,argv[0]);
+        }
+
+        else if (arg_is(arg,"--playable")) {
+            CHECK_PLAYABLE = true;
+        }
 
         // to be continued
         

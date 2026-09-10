@@ -344,6 +344,20 @@ void get_exp_date(char *exp_date, char *url_path, char *host, char *mac, struct 
     parse_pattern(exp_date,(char *)"\"phone\"",responses[thread_index]);
 }
 
+void get_genres(char *url_path, char *host, char *mac, struct curl_slist *headers, User_Proxy *proxy, int thread_index) {
+    char url[MAX_URL_LEN];
+    snprintf(url,sizeof(url),url_path,host);
+    //printf("requesting url = %s\n", url);
+    make_request(url,mac,headers,proxy,MAX_REQUESTS_RETRY,thread_index);
+    //printf("<%s>\n", responses[thread_index]);
+}
+
+void get_channels(char *url_path, char *host, char *genre_id, char *mac, struct curl_slist *headers, User_Proxy *proxy, int thread_index) {
+    char url[MAX_URL_LEN];
+    snprintf(url,sizeof(url),url_path,host,genre_id);
+    make_request(url,mac,headers,proxy,MAX_REQUESTS_RETRY,thread_index);
+}
+
 void study_reponse(char *response) {
     /* Here we check what the server answered and act accordingly */
     // access refusals
@@ -391,6 +405,25 @@ void study_reponse(char *response) {
     // else it is just empty token or exp_date
 }
 
+#define prepare_headers_no_bearer(HEADERS,STR,MAC) \
+    for (int i=0;i<MAX_HEADERS_LEN;i++) STR[i] = '\0'; \
+    HEADERS = NULL; \
+    snprintf(STR, sizeof(STR),"Accept: */*", NULL); \
+    snprintf(STR, sizeof(STR),"User-Agent: %s", ua); \
+    snprintf(STR, sizeof(STR),"X-User-Agent: %s", x_ua); \
+    snprintf(STR, sizeof(STR),"Cookie: mac=%s;stb_lang=%s;tz=%s;", (MAC),stb_lang,tz); \
+    HEADERS = curl_slist_append(HEADERS,STR); \
+    
+#define prepare_headers_with_bearer(HEADERS,STR,MAC,TOKEN) \
+    for (int i=0;i<MAX_HEADERS_LEN;i++) STR[i] = '\0'; \
+    HEADERS = NULL; \
+    snprintf(STR, sizeof(STR),"Accept: */*", NULL); \
+    snprintf(STR, sizeof(STR),"User-Agent: %s", ua); \
+    snprintf(STR, sizeof(STR),"X-User-Agent: %s", x_ua); \
+    snprintf(STR, sizeof(STR),"Cookie: mac=%s;stb_lang=%s;tz=%s;", (MAC),stb_lang,tz); \
+    snprintf(STR, sizeof(STR),"Authorization: Bearer %s", (TOKEN)); \
+    HEADERS = curl_slist_append(HEADERS,STR); \
+
 void *check(void *thread_args) {
 
     Thread_Check_Args args = *(Thread_Check_Args*)thread_args;
@@ -404,12 +437,7 @@ void *check(void *thread_args) {
     char tmp_headers[MAX_HEADERS_LEN] = {0};
     struct curl_slist *headers = {0};
 
-    // prepare for handshake
-    snprintf(tmp_headers, sizeof(tmp_headers),"Accept: */*", NULL);
-    snprintf(tmp_headers, sizeof(tmp_headers),"User-Agent: %s", ua);
-    snprintf(tmp_headers, sizeof(tmp_headers),"X-User-Agent: %s", x_ua);
-    snprintf(tmp_headers, sizeof(tmp_headers),"Cookie: mac=%s;stb_lang=%s;tz=%s;", args.mac,stb_lang,tz);
-    headers = curl_slist_append(headers,tmp_headers);
+    prepare_headers_no_bearer(headers,tmp_headers,args.mac);
 
     // prepare proxy
     User_Proxy proxy = *(User_Proxy*)args.proxy;
@@ -425,23 +453,15 @@ void *check(void *thread_args) {
         printf("%s[%d] %s%s", color_red, MAC_COUNT, args.mac, color_reset);
         fflush(stdout);
         study_reponse(responses[args.thread_index]);
+        
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
         pthread_exit(NULL);
+        
         return NULL;
     }
 
-    // reset headers
-    for (int i=0;i<MAX_HEADERS_LEN;i++) tmp_headers[i] = '\0';
-    headers = NULL;
-
-    // prepare for account verif
-    snprintf(tmp_headers, sizeof(tmp_headers),"Accept: */*", NULL);
-    snprintf(tmp_headers, sizeof(tmp_headers),"User-Agent: %s", ua);
-    snprintf(tmp_headers, sizeof(tmp_headers),"X-User-Agent: %s", x_ua);
-    snprintf(tmp_headers, sizeof(tmp_headers),"Cookie: mac=%s;stb_lang=%s;tz=%s;", args.mac,stb_lang,tz);
-    snprintf(tmp_headers, sizeof(tmp_headers),"Authorization: Bearer %s", token);
-    headers = curl_slist_append(headers,tmp_headers);
+    prepare_headers_with_bearer(headers,tmp_headers,args.mac,token);
 
     // account verif
     char exp_date[MAX_EXP_LEN] = {0};
@@ -451,22 +471,134 @@ void *check(void *thread_args) {
         printf("\33[1K\r"); // remove current line
         printf("%s[%d] %s [expired]%s", color_red, MAC_COUNT, args.mac, color_reset);
         fflush(stdout);
+        
         study_reponse(responses[args.thread_index]);
+        
         THREADS_COUNT--;
         threads[args.thread_index] = 0;
         pthread_exit(NULL);
         return NULL;
     }
 
-    //printf("exp_date: %s\n",exp_date);
+    // if user want to check for specific genre
+    if (CHECK_GENRE_MATCH || CHECK_PLAYABLE) {
+        
+        prepare_headers_no_bearer(headers,tmp_headers,args.mac);
+        
+        get_genres((char *)"%s/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml",args.host, encoded_mac, headers, &proxy, args.thread_index);
+
+        if (CHECK_GENRE_MATCH) {
+            bool ok = match_pattern(GENRE_PATTERN, responses[args.thread_index]);
+            if (!ok) {
+                printf("\33[1K\r"); // remove current line
+                fflush(stdout);
+                
+                THREADS_COUNT--;
+                threads[args.thread_index] = 0;
+                pthread_exit(NULL);
+                return NULL;
+            }
+        }
+
+        if (CHECK_PLAYABLE) {
+            
+            prepare_headers_with_bearer(headers,tmp_headers,args.mac,token);
+
+            char genre_id[10] = {0}; // ids are certainly less than 10 int long ;)
+            parse_pattern(genre_id,(char *)"\"id\"", responses[args.thread_index]);
+
+            // get a genre_id
+            if (strlen(genre_id) == 0 || genre_id[0] == '*') {
+                // the above parse_pattern could grab an unwanted id ==> "*"
+                // to temporarily solve without implementing better parsing system:
+                for (int i = 0; i < 9999; i++) {
+                    char id_pattern[10];
+                    sprintf(id_pattern,"\"%d\"", i);
+                    if (match_pattern(id_pattern,responses[args.thread_index])) {
+                        sprintf(genre_id,"%d",i);
+                        break;
+                    }
+                }
+            }
+            if (strlen(genre_id) == 0 || genre_id[0] == '*') {
+                printf("<%s>\n", responses[args.thread_index]);
+                fprintf(stderr,"[!] could not grab genre_id : current = %s\n", genre_id);
+                printf("\33[1K\r"); // remove current line
+                fflush(stdout);
+                
+                THREADS_COUNT--;
+                threads[args.thread_index] = 0;
+                pthread_exit(NULL);
+                return NULL;
+            }
+            
+            // get a channel_id
+            get_channels((char *)"%s/portal.php?type=itv&action=get_ordered_list&genre=%s&force_ch_link_check=&fav=0&sortby=number&hd=0&p=0&JsHttpRequest=1-xml&from_ch_id=0",args.host, genre_id, encoded_mac, headers, &proxy, args.thread_index);
+            
+            char channel_id[10] = {0}; // ids are certainly less than 10 int long ;)
+            parse_pattern(channel_id, (char *)"\"id\"", responses[args.thread_index]);
+
+            // get a channel_id
+            if (strlen(channel_id) == 0 || channel_id[0] == '*') {
+                // the above parse_pattern could grab an unwanted id ==> "*"
+                // to temporarily solve without implementing better parsing system:
+                for (int i = 0; i < 9999; i++) {
+                    char channel_id_pattern[10];
+                    sprintf(channel_id_pattern, "\"%d\"", i);
+                    if (match_pattern(channel_id_pattern,responses[args.thread_index])) {
+                        sprintf(channel_id,"%d",i);
+                        break;
+                    }
+                }
+            }
+            if (strlen(channel_id) == 0 || channel_id[0] == '*') {
+                fprintf(stderr,"[!] could not grab channel_id\n");
+                printf("\33[1K\r"); // remove current line
+                fflush(stdout);
+                
+                THREADS_COUNT--;
+                threads[args.thread_index] = 0;
+                pthread_exit(NULL);
+                return NULL;
+            }
+
+            // check if can play
+            char ffprobe_cmd[MAX_RESPONSE_LEN];
+
+            printf("testing     %s/play/live.php?mac=%s&stream=%s&extension=ts\n",host,args.mac,channel_id);
+
+            int ffprobe_timeout = 5; // seconds
+
+            if (match_pattern("http://",host)) {
+                sprintf(ffprobe_cmd, "ffprobe -timeout %d000000 -loglevel quiet \"%s/play/live.php?mac=%s&stream=%s&extension=ts\"",ffprobe_timeout,host,args.mac,channel_id);
+            } else {
+                sprintf(ffprobe_cmd, "ffprobe -timeout %d000000 -loglevel quiet \"http://%s/play/live.php?mac=%s&stream=%s&extension=ts\"",ffprobe_timeout,host,args.mac,channel_id);
+            }
+            
+            int ret = system(ffprobe_cmd);
+            
+            if (ret != 0) {
+                fprintf(stderr,"[!] could not play channel\n");
+                printf("\33[1K\r"); // remove current line
+                fflush(stdout);
+                
+                THREADS_COUNT--;
+                threads[args.thread_index] = 0;
+                pthread_exit(NULL);
+                return NULL;
+            }
+        }
+        
+    }
 
 #ifdef SMAC_GUI
     GUI_add_account_to_accounts_list(args.mac, exp_date);
-#else
+#endif
+    
     //printf("(thread %d) [%d] %s [%s]\n", args.mac_index,MAC_COUNT, args.mac, exp_date);
     printf("\33[1K\r"); // remove current line
     printf("[%d] %s%s%s [%s]\n", MAC_COUNT, color_green, args.mac, color_reset, exp_date);
-#endif
+
     write_account_to_save_file(args.mac, exp_date);
     ACCOUNTS_COUNT++;
 
@@ -616,8 +748,8 @@ void init_mac_from_file(char *filepath) {
 // https://curl.se/libcurl/c/url2file.html
 static size_t write_to_file_from_url(char *ptr, size_t size, size_t nmemb, void *stream)
 {
-  size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
-  return written;
+    size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
+    return written;
 }
  
 int download_proxy_file_from_url(char *filename, char *url) {

@@ -13,6 +13,10 @@
 
 int MAX_MAC_COUNT = -1;
 
+bool CHECK_GENRE_MATCH = false;
+bool CHECK_PLAYABLE = false;
+char GENRE_PATTERN[MAX_TOKEN_LEN] = {0};
+
 #define THREADS_LIMIT 32
 
 #ifdef _WIN32

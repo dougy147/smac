@@ -22,6 +22,7 @@
 #include "utils.c"
 #include "proxies.c"
 #include "args.c"
+#include "macs.c"
 
 int MAC_COUNT = 0;
 int ACCOUNTS_COUNT = 0;
@@ -540,9 +541,44 @@ void compute_next_mac_sequential(char *next_mac, char *mac) {
         next_mac_LL >> 8 & 0XFF,  next_mac_LL >> 0 & 0XFF);  
 }
 
+void compute_next_mac_from_file(char *mac) {
+    // populate the provided char* with next mac in file
+
+    if (MAC_FILE == 0) {
+        fprintf(stderr,"[!] no mac file is opened");
+        return;
+    }
+
+    while (is_whitespace(*MAC_FILE)) *MAC_FILE++;
+
+    int length = 0;
+
+    while (*MAC_FILE != '\0') {
+        while (is_whitespace(*MAC_FILE)) *MAC_FILE++;
+        while (*MAC_FILE != '\0' && !is_whitespace(*MAC_FILE)) {
+            *MAC_FILE++;
+            length++;
+            assert(length <= STR_MAC_LEN - 1);
+        }
+        break;
+    }
+
+    if (length == 0) {
+        fprintf(stderr,"[!] no mac could be parsed\n");
+    } else {
+        assert(length == STR_MAC_LEN - 1);
+    }
+    
+    strncpy(mac,MAC_FILE - length,length);
+    mac[length] = '\0';
+    
+}
+    
+
 void compute_next_mac(char *next_mac, char *mac) {
-    if (SCAN_MODE == SEQUENTIAL)  compute_next_mac_sequential(next_mac, mac);
-    else if (SCAN_MODE == RANDOM) compute_next_mac_random(next_mac);
+    if (SCAN_MODE == SEQUENTIAL)    compute_next_mac_sequential(next_mac, mac);
+    else if (SCAN_MODE == RANDOM)   compute_next_mac_random(next_mac);
+    else if (SCAN_MODE == FROM_MAC_FILE) compute_next_mac_from_file(next_mac);
     //else { fprintf(stderr,"[!] ERROR: Unknown SCAN_MODE\n"); }
 }
 
@@ -563,6 +599,24 @@ void init_proxy_from_file(char *filepath) {
     }
 
 }
+
+void init_mac_from_file(char *filepath) {
+    if (strlen(filepath) == 0) return;
+    strcpy(MAC_FILE_FILEPATH,filepath);
+    
+#ifdef _WIN32
+    path_to_windows_path(MAC_FILE_FILEPATH);
+#endif
+
+    bool ok = import_mac_file(MAC_FILE_FILEPATH);
+    if (ok) {
+        compute_next_mac(next_mac,mac);
+    } else {
+        fprintf(stderr,"[!] Could not import mac file");
+    }
+
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////
 
@@ -699,6 +753,15 @@ void *scan(void *_) {
 
         compute_next_mac(next_mac,mac);
         strcpy(mac,next_mac);
+
+        lower_string(mac);      //todo improve this
+        lower_string(mac_last); //todo improve this
+        
+        if (strlen(mac) == 0 || strcmp(mac,mac_last) == 0) {
+            printf("[i] we done => last mac reached == %s\n", mac);
+            break;
+        }
+        
         MAC_COUNT++;
 
         if (pause_nb > 0 && MAC_COUNT % pause_nb == 0) {
@@ -745,6 +808,10 @@ void prepare() {
         if (SCAN_MODE == SEQUENTIAL) {
             strcpy(mac,mac_first);
         }
+    }
+
+    if (SCAN_MODE == FROM_MAC_FILE) {
+        init_mac_from_file(MAC_FILE_FILEPATH);
     }
 
     if (USE_PROXY) {

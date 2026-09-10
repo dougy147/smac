@@ -9,6 +9,8 @@
 
 #define MAX_PROXY_SETTINGS_LEN 128
 
+#define MAX_FILE_SIZE 1024 * 1024 // 1MB
+
 #define THREADS_LIMIT 32
 
 #ifdef _WIN32
@@ -78,7 +80,10 @@ typedef struct {
 enum {
     SEQUENTIAL,
     RANDOM,
+    FROM_MAC_FILE,
 } Scan_Mode;
+
+char MAC_FILE_FILEPATH[MAX_PATH_LEN]  = {0};
 
 int SCAN_MODE = SEQUENTIAL;
 bool SCANNING = false;

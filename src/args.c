@@ -120,6 +120,13 @@ void parse_args(int argc, char **argv) {
             shift();
             MAX_REQUESTS_RETRY = atoi(argv[0]);
         }
+        
+        else if (arg_is(arg,"--mac-file")) {
+            shift();
+            SCAN_MODE = FROM_MAC_FILE;
+            strcpy(MAC_FILE_FILEPATH,argv[0]);
+        }
+
 
         // to be continued
         

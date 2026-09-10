@@ -4,8 +4,6 @@
 #include <string.h>
 #include <assert.h>
 
-#define MAX_FILE_SIZE 1024 * 1024 // 1MB
-
 typedef struct {
     char *init; // keep original ptr if need to go back to beginning
     char *cur; // current position in file

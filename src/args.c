@@ -127,6 +127,11 @@ void parse_args(int argc, char **argv) {
             strcpy(MAC_FILE_FILEPATH,argv[0]);
         }
 
+        else if (arg_is(arg,"--stop")) {
+            shift();
+            MAX_MAC_COUNT = atoi(argv[0]);
+        }
+
 
         // to be continued
         

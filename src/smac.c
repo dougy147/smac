@@ -754,8 +754,11 @@ void *scan(void *_) {
             //printf("[i] we done => last mac reached == %s\n", mac);
             break;
         }
-        
+
         MAC_COUNT++;
+        if (MAX_MAC_COUNT > 0 && MAC_COUNT >= MAX_MAC_COUNT) {
+            break;
+        }
 
         if (pause_nb > 0 && MAC_COUNT % pause_nb == 0) {
 

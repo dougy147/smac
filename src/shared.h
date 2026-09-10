@@ -11,6 +11,8 @@
 
 #define MAX_FILE_SIZE 1024 * 1024 // 1MB
 
+int MAX_MAC_COUNT = -1;
+
 #define THREADS_LIMIT 32
 
 #ifdef _WIN32

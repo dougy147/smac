@@ -487,40 +487,33 @@ long long power(int n, unsigned int exp) {
 }
 
 void compute_next_mac_random(char *next_mac) {
-    // handle prefix
-    char mac_prefix_no_colon[MAC_LEN+1] = {0};
-    for (int i = 0; i < strlen(mac_prefix); i++) {
-        if (mac_prefix[i] != ':') mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = mac_prefix[i];
+    
+    char mac_first_no_colon[MAC_LEN+1] = {0};
+    char mac_last_no_colon[MAC_LEN+1]  = {0};
+
+    for (int i = 0; i < strlen(mac_first); i++) {
+        if (mac_first[i] != ':') mac_first_no_colon[strlen(mac_first_no_colon)] = mac_first[i];
     }
-    mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '\0';
-
-    int bytes_to_fill = MAC_LEN - strlen(mac_prefix_no_colon);
-
-    for (int i = 0; i<bytes_to_fill; i++) mac_prefix_no_colon[strlen(mac_prefix_no_colon)] = '0';
-    long long mac_prefix_LL = strtoll(mac_prefix_no_colon,NULL,16);
- 
-    char random_mac[STR_MAC_LEN] = {0};
-
-    long long random_part = 0;
-    for (int i=1;i<=bytes_to_fill;i++) {
-        random_part += (long long)rand() << ((i-1)*4);
+    mac_first_no_colon[strlen(mac_first_no_colon)] = '\0';
+    
+    for (int i = 0; i < strlen(mac_last); i++) {
+        if (mac_last[i] != ':') mac_last_no_colon[strlen(mac_last_no_colon)] = mac_last[i];
     }
-    random_part %= power(16,bytes_to_fill);
-    long long random_mac_LL = mac_prefix_LL + random_part;
+    mac_last_no_colon[strlen(mac_last_no_colon)] = '\0';
+    
+    long long mac_first_LL = strtoll(mac_first_no_colon,NULL,16);
+    long long mac_last_LL  = strtoll(mac_last_no_colon,NULL,16);
 
+    assert(mac_last_LL >= mac_first_LL);
+    long long diff_LL = mac_last_LL - mac_first_LL;
+
+    long long random_part_LL = (long long)rand() % (diff_LL + 1);
+    long long random_mac_LL  = mac_first_LL + random_part_LL;
+    
     sprintf(next_mac,"%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
         random_mac_LL >> 40 & 0XFF, random_mac_LL >> 32 & 0XFF, 
         random_mac_LL >> 24 & 0XFF, random_mac_LL >> 16 & 0XFF, 
         random_mac_LL >> 8 & 0XFF,  random_mac_LL >> 0 & 0XFF);  
-
-//    printf("mac_prefix = %s            \n", mac_prefix);
-//    printf("bytes_to_fill = %d\n", bytes_to_fill);
-//    printf("power(16,%d) = %lld\n",bytes_to_fill, power(16,bytes_to_fill));
-//    printf("mac_prefix_no_colon = %s\n",mac_prefix_no_colon);
-//    printf("mac_prefix_LL = %lld\n",mac_prefix_LL);
-//    printf("random_part       = %lld\n",random_part);
-//    printf("random_mac_LL = %lld\n", random_mac_LL);
-//    printf("random_mac = %s\n", random_mac);
 
 }
 
@@ -758,7 +751,7 @@ void *scan(void *_) {
         lower_string(mac_last); //todo improve this
         
         if (strlen(mac) == 0 || strcmp(mac,mac_last) == 0) {
-            printf("[i] we done => last mac reached == %s\n", mac);
+            //printf("[i] we done => last mac reached == %s\n", mac);
             break;
         }
         

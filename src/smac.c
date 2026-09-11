@@ -4,8 +4,31 @@
 */
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+
+void usage(int exit_code) {
+    printf("USAGE: smac [--url] <server> [OPTS]\n"
+           "OPTS:\n"
+           "    TARGET:\n"
+           "        -u <server> : server URL\n"
+           "\n"
+           "    SCAN MODE:\n"
+           "        --seq : scan sequentially from [--first] to [--last] MAC\n"
+           "        --random : scan randomly between [--first] and [--last] MAC\n"
+           "        --mac-file <FILE> : scan only MACs contained in FILE\n"
+           "\n"
+           "    REQUESTS:\n"
+           "        -w <MILLIS> : delay after each checking request\n"
+           "        -b <INT> : pause every INT checking request\n"
+           "        -d <MILLIS> : pause duration\n"
+           "        -t <MILLIS> : set timeout (default = 3000 ms)\n"
+           "        -s <INT> : stop after INT check (default = -1)\n"
+           "        --threads <INT> : parallel requests (default = 1)\n"
+           );
+    exit(exit_code);
+}
+
+#include <string.h>
 #include <ctype.h>
 
 #include <curl/curl.h>
@@ -189,8 +212,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
+    
     //curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, (long)3);
     //curl_easy_setopt(curl, CURLOPT_SERVER_RESPONSE_TIMEOUT, (long)3);
     //curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)request_timeout / 1000);
@@ -434,10 +456,10 @@ void *check(void *thread_args) {
     encode_mac(encoded_mac, args.mac);
 
     //printf("mac = %s ; encoded = %s ; index = %d\n", args.mac, encoded_mac, args.thread_index);
-    char tmp_headers[MAX_HEADERS_LEN] = {0};
+    char headers_str[MAX_HEADERS_LEN] = {0};
     struct curl_slist *headers = {0};
 
-    prepare_headers_no_bearer(headers,tmp_headers,args.mac);
+    prepare_headers_no_bearer(headers,headers_str,args.mac);
 
     // prepare proxy
     User_Proxy proxy = *(User_Proxy*)args.proxy;
@@ -461,7 +483,7 @@ void *check(void *thread_args) {
         return NULL;
     }
 
-    prepare_headers_with_bearer(headers,tmp_headers,args.mac,token);
+    prepare_headers_with_bearer(headers,headers_str,args.mac,token);
 
     // account verif
     char exp_date[MAX_EXP_LEN] = {0};
@@ -483,7 +505,7 @@ void *check(void *thread_args) {
     // if user want to check for specific genre
     if (CHECK_GENRE_MATCH || CHECK_PLAYABLE) {
         
-        prepare_headers_no_bearer(headers,tmp_headers,args.mac);
+        prepare_headers_no_bearer(headers,headers_str,args.mac);
         
         get_genres((char *)"%s/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml",args.host, encoded_mac, headers, &proxy, args.thread_index);
 
@@ -502,7 +524,7 @@ void *check(void *thread_args) {
 
         if (CHECK_PLAYABLE) {
             
-            prepare_headers_with_bearer(headers,tmp_headers,args.mac,token);
+            prepare_headers_with_bearer(headers,headers_str,args.mac,token);
 
             char genre_id[10] = {0}; // ids are certainly less than 10 int long ;)
             parse_pattern(genre_id,(char *)"\"id\"", responses[args.thread_index]);
@@ -521,8 +543,8 @@ void *check(void *thread_args) {
                 }
             }
             if (strlen(genre_id) == 0 || genre_id[0] == '*') {
-                printf("<%s>\n", responses[args.thread_index]);
-                fprintf(stderr,"[!] could not grab genre_id : current = %s\n", genre_id);
+                //printf("<%s>\n", responses[args.thread_index]);
+                //fprintf(stderr,"[!] could not grab genre_id : current = %s\n", genre_id);
                 printf("\33[1K\r"); // remove current line
                 fflush(stdout);
                 
@@ -552,7 +574,7 @@ void *check(void *thread_args) {
                 }
             }
             if (strlen(channel_id) == 0 || channel_id[0] == '*') {
-                fprintf(stderr,"[!] could not grab channel_id\n");
+                //fprintf(stderr,"[!] could not grab channel_id\n");
                 printf("\33[1K\r"); // remove current line
                 fflush(stdout);
                 
@@ -565,7 +587,7 @@ void *check(void *thread_args) {
             // check if can play
             char ffprobe_cmd[MAX_RESPONSE_LEN];
 
-            printf("testing     %s/play/live.php?mac=%s&stream=%s&extension=ts\n",host,args.mac,channel_id);
+            //printf("testing     %s/play/live.php?mac=%s&stream=%s&extension=ts\n",host,args.mac,channel_id);
 
             int ffprobe_timeout = 5; // seconds
 
@@ -578,7 +600,7 @@ void *check(void *thread_args) {
             int ret = system(ffprobe_cmd);
             
             if (ret != 0) {
-                fprintf(stderr,"[!] could not play channel\n");
+                //fprintf(stderr,"[!] could not play channel\n");
                 printf("\33[1K\r"); // remove current line
                 fflush(stdout);
                 

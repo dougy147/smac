@@ -143,7 +143,30 @@ void parse_args(int argc, char **argv) {
             CHECK_PLAYABLE = true;
         }
 
+        else if (arg_is(arg,"-h") || arg_is(arg,"--help") || arg_is(arg, "-help") || arg_is(arg, "help")) {
+            // sure we never miss a help request x')
+            usage(0);
+        }
+
         // to be continued
-        
+
+        else {
+            // --url is the only mandatory variable
+            // consider "untagged" argument as --url "host"
+            // only if "host" was not defined yet
+            if (strlen(host) == 0) {
+                fprintf(stderr, "[!] Unknown argument: %s\n", arg);
+                usage(1);
+            } else {
+                strcpy(host, arg);
+            }
+        }
+    }
+
+    if (strlen(host) == 0) {
+        fprintf(stderr,"[!] No target server was provided\n");
+        usage(1);
+    } else {
+        printf("scanning host = %s\n", host);
     }
 }

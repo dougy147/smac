@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>533</width>
-    <height>631</height>
+    <width>435</width>
+    <height>570</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,8 +19,8 @@
      <rect>
       <x>0</x>
       <y>10</y>
-      <width>531</width>
-      <height>571</height>
+      <width>431</width>
+      <height>521</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -42,7 +42,7 @@
      <widget class="QLineEdit" name="server_url">
       <property name="geometry">
        <rect>
-        <x>110</x>
+        <x>80</x>
         <y>10</y>
         <width>261</width>
         <height>26</height>
@@ -52,7 +52,7 @@
      <widget class="QRadioButton" name="radio_button_random">
       <property name="geometry">
        <rect>
-        <x>230</x>
+        <x>180</x>
         <y>60</y>
         <width>102</width>
         <height>24</height>
@@ -68,22 +68,22 @@
      <widget class="QLabel" name="label">
       <property name="geometry">
        <rect>
-        <x>30</x>
+        <x>20</x>
         <y>10</y>
-        <width>81</width>
+        <width>51</width>
         <height>20</height>
        </rect>
       </property>
       <property name="text">
-       <string>Server URL</string>
+       <string>Server</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_2">
       <property name="geometry">
        <rect>
-        <x>50</x>
+        <x>20</x>
         <y>60</y>
-        <width>58</width>
+        <width>51</width>
         <height>18</height>
        </rect>
       </property>
@@ -102,7 +102,7 @@
        <rect>
         <x>50</x>
         <y>190</y>
-        <width>421</width>
+        <width>331</width>
         <height>171</height>
        </rect>
       </property>
@@ -110,8 +110,8 @@
      <widget class="QPushButton" name="button_scan">
       <property name="geometry">
        <rect>
-        <x>180</x>
-        <y>390</y>
+        <x>140</x>
+        <y>380</y>
         <width>131</width>
         <height>51</height>
        </rect>
@@ -123,7 +123,7 @@
      <widget class="QRadioButton" name="radio_button_sequential">
       <property name="geometry">
        <rect>
-        <x>110</x>
+        <x>80</x>
         <y>60</y>
         <width>102</width>
         <height>24</height>
@@ -142,9 +142,9 @@
      <widget class="QPushButton" name="button_reset_checkpoint">
       <property name="geometry">
        <rect>
-        <x>380</x>
+        <x>350</x>
         <y>10</y>
-        <width>80</width>
+        <width>51</width>
         <height>26</height>
        </rect>
       </property>
@@ -158,7 +158,7 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>120</x>
+        <x>80</x>
         <y>100</y>
         <width>279</width>
         <height>53</height>
@@ -172,7 +172,7 @@
       </property>
       <property name="font">
        <font>
-        <pointsize>13</pointsize>
+        <pointsize>19</pointsize>
        </font>
       </property>
       <property name="alignment">
@@ -182,7 +182,7 @@
      <widget class="QProgressBar" name="busy_indicator">
       <property name="geometry">
        <rect>
-        <x>120</x>
+        <x>80</x>
         <y>150</y>
         <width>279</width>
         <height>26</height>
@@ -207,7 +207,7 @@
      <widget class="QRadioButton" name="radio_button_from_file">
       <property name="geometry">
        <rect>
-        <x>340</x>
+        <x>270</x>
         <y>60</y>
         <width>102</width>
         <height>24</height>
@@ -226,7 +226,7 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>420</x>
+        <x>360</x>
         <y>60</y>
         <width>25</width>
         <height>25</height>
@@ -244,7 +244,7 @@
      <widget class="QLineEdit" name="settings_mac_first">
       <property name="geometry">
        <rect>
-        <x>150</x>
+        <x>100</x>
         <y>30</y>
         <width>141</width>
         <height>26</height>
@@ -254,9 +254,9 @@
      <widget class="QLabel" name="label_6">
       <property name="geometry">
        <rect>
-        <x>50</x>
+        <x>10</x>
         <y>30</y>
-        <width>58</width>
+        <width>81</width>
         <height>18</height>
        </rect>
       </property>
@@ -267,9 +267,9 @@
      <widget class="QLabel" name="label_7">
       <property name="geometry">
        <rect>
-        <x>50</x>
+        <x>10</x>
         <y>70</y>
-        <width>58</width>
+        <width>81</width>
         <height>18</height>
        </rect>
       </property>
@@ -280,7 +280,7 @@
      <widget class="QLineEdit" name="settings_mac_last">
       <property name="geometry">
        <rect>
-        <x>150</x>
+        <x>100</x>
         <y>70</y>
         <width>141</width>
         <height>26</height>
@@ -290,9 +290,9 @@
      <widget class="QLabel" name="label_9">
       <property name="geometry">
        <rect>
-        <x>50</x>
+        <x>10</x>
         <y>110</y>
-        <width>71</width>
+        <width>81</width>
         <height>20</height>
        </rect>
       </property>
@@ -303,7 +303,7 @@
      <widget class="QLineEdit" name="settings_mac_prefix">
       <property name="geometry">
        <rect>
-        <x>150</x>
+        <x>100</x>
         <y>110</y>
         <width>141</width>
         <height>26</height>
@@ -313,20 +313,20 @@
      <widget class="QCheckBox" name="settings_autosave_checkbox">
       <property name="geometry">
        <rect>
-        <x>330</x>
+        <x>260</x>
         <y>50</y>
-        <width>141</width>
+        <width>161</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>Auto-save accounts</string>
+       <string>Save accounts</string>
       </property>
      </widget>
      <widget class="QComboBox" name="thread_combobox">
       <property name="geometry">
        <rect>
-        <x>110</x>
+        <x>80</x>
         <y>410</y>
         <width>79</width>
         <height>26</height>
@@ -336,14 +336,14 @@
      <widget class="QLabel" name="label_10">
       <property name="geometry">
        <rect>
-        <x>20</x>
+        <x>10</x>
         <y>410</y>
         <width>81</width>
         <height>20</height>
        </rect>
       </property>
       <property name="text">
-       <string>Sim. requests</string>
+       <string>Threads</string>
       </property>
      </widget>
      <widget class="QLineEdit" name="settings_save_dir">
@@ -352,9 +352,9 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>180</x>
+        <x>140</x>
         <y>160</y>
-        <width>281</width>
+        <width>261</width>
         <height>26</height>
        </rect>
       </property>
@@ -368,20 +368,20 @@
      <widget class="QLabel" name="label_11">
       <property name="geometry">
        <rect>
-        <x>50</x>
+        <x>10</x>
         <y>160</y>
-        <width>91</width>
+        <width>81</width>
         <height>20</height>
        </rect>
       </property>
       <property name="text">
-       <string>Save directory</string>
+       <string>Results dir</string>
       </property>
      </widget>
      <widget class="QToolButton" name="settings_select_dir_toolbutton">
       <property name="geometry">
        <rect>
-        <x>150</x>
+        <x>100</x>
         <y>160</y>
         <width>25</width>
         <height>25</height>
@@ -394,7 +394,7 @@
      <widget class="QCheckBox" name="settings_use_checkpoints">
       <property name="geometry">
        <rect>
-        <x>330</x>
+        <x>260</x>
         <y>20</y>
         <width>141</width>
         <height>24</height>
@@ -407,20 +407,20 @@
      <widget class="QLabel" name="label_8">
       <property name="geometry">
        <rect>
-        <x>40</x>
+        <x>10</x>
         <y>210</y>
         <width>91</width>
         <height>18</height>
        </rect>
       </property>
       <property name="text">
-       <string>Req delay (ms)</string>
+       <string>Delay (ms)</string>
       </property>
      </widget>
      <widget class="QLineEdit" name="entry_request_delay">
       <property name="geometry">
        <rect>
-        <x>140</x>
+        <x>110</x>
         <y>210</y>
         <width>51</width>
         <height>26</height>
@@ -430,7 +430,7 @@
      <widget class="QLineEdit" name="entry_pause_nb">
       <property name="geometry">
        <rect>
-        <x>140</x>
+        <x>110</x>
         <y>250</y>
         <width>51</width>
         <height>26</height>
@@ -440,20 +440,20 @@
      <widget class="QLabel" name="label_12">
       <property name="geometry">
        <rect>
-        <x>40</x>
+        <x>10</x>
         <y>250</y>
         <width>91</width>
         <height>18</height>
        </rect>
       </property>
       <property name="text">
-       <string>Pause every...</string>
+       <string>Pause count</string>
       </property>
      </widget>
      <widget class="QLineEdit" name="entry_pause_duration">
       <property name="geometry">
        <rect>
-        <x>140</x>
+        <x>110</x>
         <y>290</y>
         <width>51</width>
         <height>26</height>
@@ -463,7 +463,7 @@
      <widget class="QLabel" name="label_13">
       <property name="geometry">
        <rect>
-        <x>40</x>
+        <x>10</x>
         <y>290</y>
         <width>101</width>
         <height>18</height>
@@ -476,7 +476,7 @@
      <widget class="QLineEdit" name="entry_request_timeout">
       <property name="geometry">
        <rect>
-        <x>140</x>
+        <x>110</x>
         <y>330</y>
         <width>51</width>
         <height>26</height>
@@ -486,9 +486,9 @@
      <widget class="QLabel" name="label_14">
       <property name="geometry">
        <rect>
-        <x>40</x>
+        <x>10</x>
         <y>330</y>
-        <width>91</width>
+        <width>101</width>
         <height>18</height>
        </rect>
       </property>
@@ -500,8 +500,8 @@
       <property name="geometry">
        <rect>
         <x>230</x>
-        <y>210</y>
-        <width>85</width>
+        <y>200</y>
+        <width>111</width>
         <height>24</height>
        </rect>
       </property>
@@ -515,9 +515,9 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>220</x>
-        <y>240</y>
-        <width>281</width>
+        <x>170</x>
+        <y>230</y>
+        <width>251</width>
         <height>251</height>
        </rect>
       </property>
@@ -548,7 +548,7 @@
         <rect>
          <x>10</x>
          <y>40</y>
-         <width>261</width>
+         <width>241</width>
          <height>41</height>
         </rect>
        </property>
@@ -578,9 +578,9 @@
        </property>
        <property name="geometry">
         <rect>
-         <x>140</x>
+         <x>160</x>
          <y>0</y>
-         <width>81</width>
+         <width>91</width>
          <height>24</height>
         </rect>
        </property>
@@ -593,7 +593,7 @@
         <rect>
          <x>10</x>
          <y>200</y>
-         <width>261</width>
+         <width>241</width>
          <height>41</height>
         </rect>
        </property>
@@ -622,7 +622,7 @@
         <rect>
          <x>10</x>
          <y>160</y>
-         <width>261</width>
+         <width>241</width>
          <height>41</height>
         </rect>
        </property>
@@ -661,7 +661,7 @@
         <rect>
          <x>10</x>
          <y>80</y>
-         <width>261</width>
+         <width>241</width>
          <height>41</height>
         </rect>
        </property>
@@ -690,7 +690,7 @@
         <rect>
          <x>10</x>
          <y>120</y>
-         <width>261</width>
+         <width>241</width>
          <height>41</height>
         </rect>
        </property>
@@ -720,7 +720,7 @@
        </property>
        <property name="geometry">
         <rect>
-         <x>90</x>
+         <x>100</x>
          <y>0</y>
          <width>51</width>
          <height>24</height>
@@ -734,35 +734,35 @@
      <widget class="QCheckBox" name="checkbox_settings_check_playable">
       <property name="geometry">
        <rect>
-        <x>10</x>
-        <y>460</y>
+        <x>260</x>
+        <y>80</y>
         <width>161</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>Check if playable</string>
+       <string>Check playable</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_15">
       <property name="geometry">
        <rect>
-        <x>10</x>
-        <y>500</y>
-        <width>121</width>
+        <x>260</x>
+        <y>120</y>
+        <width>101</width>
         <height>20</height>
        </rect>
       </property>
       <property name="text">
-       <string>Genre must match</string>
+       <string>Genre match</string>
       </property>
      </widget>
      <widget class="QLineEdit" name="entry_genre_match">
       <property name="geometry">
        <rect>
-        <x>140</x>
-        <y>500</y>
-        <width>121</width>
+        <x>370</x>
+        <y>120</y>
+        <width>51</width>
         <height>26</height>
        </rect>
       </property>
@@ -773,7 +773,7 @@
      <widget class="QLineEdit" name="entry_stop_count">
       <property name="geometry">
        <rect>
-        <x>140</x>
+        <x>110</x>
         <y>370</y>
         <width>51</width>
         <height>26</height>
@@ -783,7 +783,7 @@
      <widget class="QLabel" name="label_16">
       <property name="geometry">
        <rect>
-        <x>40</x>
+        <x>10</x>
         <y>370</y>
         <width>91</width>
         <height>18</height>
@@ -822,7 +822,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>533</width>
+     <width>435</width>
      <height>23</height>
     </rect>
    </property>

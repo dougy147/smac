@@ -29,8 +29,7 @@ char GENRE_PATTERN[MAX_TOKEN_LEN] = {0};
 
 int NB_THREADS = 1; // user defined
 
-char host[MAX_URL_LEN] = "http://localhost:8008";
-//char host[MAX_URL_LEN] = {0};
+char host[MAX_URL_LEN] = {0}; //"http://localhost:8008";
 char host_previous[MAX_URL_LEN] = {0};
 
 char mac[STR_MAC_LEN]       = {0};
@@ -51,7 +50,7 @@ char PROXY_MANUAL_USERNAME[MAX_PROXY_SETTINGS_LEN] = {0};
 char PROXY_MANUAL_PASSWORD[MAX_PROXY_SETTINGS_LEN] = {0};
 char PROXY_FILE_FILEPATH[MAX_PATH_LEN]  = {0};
 //char PROXY_FILE_URL[MAX_URL_LEN] = {0};
-char PROXY_FILE_URL[MAX_URL_LEN] = "https://raw.githubusercontent.com/stormsia/proxy-list/main/http.txt";
+char PROXY_FILE_URL[MAX_URL_LEN] = "https://raw.githubusercontent.com/stormsia/proxy-list/main/http.txt"; // test
 
 enum {
     NONE,

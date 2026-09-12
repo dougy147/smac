@@ -1,15 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
-project(MyApp VERSION 1.0.0 LANGUAGES CXX)
+project(Smac VERSION 0.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_PREFIX_PATH "C:/msys64/mingw64/qt6-static")
 
-
+# check if this works to get icon on sloppy windowz
+set(app_icon_resource_windows "${CMAKE_CURRENT_SOURCE_DIR}/icon.rc")
+    
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets UiTools OpenGL)
 qt_standard_project_setup()
 
-qt_add_executable(main-windows main.cpp)
+qt_add_executable(main-windows smac-gui.cpp ${app_icon_resource_windows})
 
 # Manually specify curl
 target_include_directories(main-windows PRIVATE ./3rd/curl-8.21.0_6-win64-mingw/include)

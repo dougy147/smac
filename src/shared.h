@@ -13,11 +13,19 @@
 
 int MAX_MAC_COUNT = 0;
 
+#define MAX_RESPONSE_LEN 16 * 1024
+#define MAX_URL_LEN 2048
+#define MAX_HEADERS_LEN 2048
+
+#define MAC_LEN 12
+#define STR_MAC_LEN MAC_LEN + 5 + 1
+
+
 bool CHECK_GENRE_MATCH = false;
 bool CHECK_PLAYABLE = false;
 char GENRE_PATTERN[MAX_TOKEN_LEN] = {0};
 
-#define THREADS_LIMIT 32
+#define THREADS_LIMIT 8
 
 #ifdef _WIN32
 #define DEFAULT_RESULTS_DIR "..\\results"

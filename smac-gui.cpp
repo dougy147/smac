@@ -72,7 +72,7 @@ QToolButton  *toolbutton_file_url_proxy;
 QLineEdit    *entry_file_proxy;
 QLineEdit    *entry_file_url_proxy;
 
-#include "src/smac.c"
+#include "smac.c"
 #include "src/shared.h"
 #include "src/utils.c"
 
@@ -348,7 +348,7 @@ int main(int argc, char *argv[]) {
     /* Threads Combobox */
     QComboBox *thread_combobox= w->findChild<QComboBox*>("thread_combobox");
 
-    for (int i=1;i <= (THREADS_LIMIT / 4) ;i++) {
+    for (int i=1;i <= (THREADS_LIMIT) ;i++) {
         thread_combobox->addItems({QString::number(i)});
     }
 

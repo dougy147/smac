@@ -34,18 +34,11 @@ void usage(int exit_code) {
 #include <curl/curl.h>
 #include <pthread.h>
 
-#define MAX_RESPONSE_LEN 16 * 1024
-#define MAX_URL_LEN 2048
-#define MAX_HEADERS_LEN 2048
-
-#define MAC_LEN 12
-#define STR_MAC_LEN MAC_LEN + 5 + 1
-
-#include "shared.h"
-#include "utils.c"
-#include "proxies.c"
-#include "args.c"
-#include "macs.c"
+#include "src/shared.h"
+#include "src/utils.c"
+#include "src/proxies.c"
+#include "src/args.c"
+#include "src/macs.c"
 
 int MAC_COUNT = 0;
 int ACCOUNTS_COUNT = 0;
@@ -204,7 +197,7 @@ void encode_mac(char *encoded_mac, char *mac) {
     encoded_mac[encoded_mac_len] = '\0';
 }
 
-#include "write_callback_declarations.h"
+#include "src/write_callback_declarations.h"
 
 void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *proxy, int max_retry, int thread_index) {
 
@@ -222,7 +215,7 @@ void make_request(char *url, char *mac, struct curl_slist *headers, User_Proxy *
     curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, proxy->username);
     curl_easy_setopt(curl, CURLOPT_PROXYPASSWORD, proxy->password);
 
-#include "write_callback_calls.h"
+#include "src/write_callback_calls.h"
 
     CURLcode res = curl_easy_perform(curl);
     long response_code;
@@ -340,6 +333,12 @@ void parse_pattern(char *dst, char *pattern, char *response) {
 void lower_string(char *str) {
     for (int i=0;i<strlen(str);i++) {
         str[i] = tolower(str[i]);
+    }
+}
+
+void upper_string(char *str) {
+    for (int i=0;i<strlen(str);i++) {
+        str[i] = toupper(str[i]);
     }
 }
 
@@ -901,8 +900,8 @@ void *scan(void *_) {
         compute_next_mac(next_mac,mac);
         strcpy(mac,next_mac);
 
-        lower_string(mac);      //todo improve this
-        lower_string(mac_last); //todo improve this
+        upper_string(mac);      //todo improve this
+        upper_string(mac_last); //todo improve this
         
         if (strlen(mac) == 0 || strcmp(mac,mac_last) == 0) {
             //printf("[i] we done => last mac reached == %s\n", mac);

@@ -107,6 +107,7 @@ void parse_args(int argc, char **argv) {
         else if (arg_is(arg,"--threads")) {
             shift();
             NB_THREADS = atoi(argv[0]);
+            assert(NB_THREADS <= THREADS_LIMIT);
         }
 
         else if (arg_is(arg,"--results-dir")) {
@@ -166,7 +167,7 @@ void parse_args(int argc, char **argv) {
     if (strlen(host) == 0) {
         fprintf(stderr,"[!] No target server was provided\n");
         usage(1);
-    } else {
-        printf("scanning host = %s\n", host);
+    //} else {
+    //    printf("scanning host = %s\n", host);
     }
 }

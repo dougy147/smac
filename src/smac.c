@@ -910,7 +910,7 @@ void *scan(void *_) {
         }
 
         MAC_COUNT++;
-        if (MAX_MAC_COUNT > 0 && MAC_COUNT >= MAX_MAC_COUNT) {
+        if (MAX_MAC_COUNT > 0 && MAC_COUNT > MAX_MAC_COUNT) {
             break;
         }
 
@@ -942,6 +942,8 @@ void *scan(void *_) {
 #ifdef SMAC_GUI
     GUI_scan_ended_by_itself();
 #endif
+
+    MAC_COUNT = 0;
 
     return NULL;
 }

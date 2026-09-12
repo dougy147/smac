@@ -11,7 +11,7 @@
 
 #define MAX_FILE_SIZE 1024 * 1024 // 1MB
 
-int MAX_MAC_COUNT = -1;
+int MAX_MAC_COUNT = 0;
 
 bool CHECK_GENRE_MATCH = false;
 bool CHECK_PLAYABLE = false;

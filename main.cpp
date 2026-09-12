@@ -464,7 +464,7 @@ int main(int argc, char *argv[]) {
 
     QIntValidator* validator_entry_stop_count = new QIntValidator(-1, 3600000, entry_stop_count);
     entry_stop_count->setValidator(validator_entry_stop_count);
-    if (MAX_MAC_COUNT >= -1) entry_stop_count->setText(QString::number(MAX_MAC_COUNT));
+    if (MAX_MAC_COUNT >= 0) entry_stop_count->setText(QString::number(MAX_MAC_COUNT));
     QObject::connect(entry_stop_count, &QLineEdit::textChanged,entry_stop_count, []() {
         MAX_MAC_COUNT = entry_stop_count->text().toInt();
     });

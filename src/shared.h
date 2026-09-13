@@ -111,6 +111,8 @@ typedef struct {
     User_Proxy proxy;
 } Scan_Session;
 
+
+void usage(int exit_code);
 // this is to avoid crashes updating the GUI
 // maybe we also should ensure C++ does not 
 // mangle our C function? but i am not sure 

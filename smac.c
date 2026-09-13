@@ -1,44 +1,42 @@
-/* NOTE:
-    this is the cli version of smac (similar to good old mcbash)
-    written in "pure C" it is used by main.cpp
+/*
+    cc -o smac smac.c -lcurl
+    ./smac -h
 */
 
 #include <stdio.h>
 #include <stdlib.h>
-
-void usage(int exit_code) {
-    printf("USAGE: smac [--url] <server> [OPTS]\n"
-           "OPTS:\n"
-           "    TARGET:\n"
-           "        -u <server> : server URL\n"
-           "\n"
-           "    SCAN MODE:\n"
-           "        --seq : scan sequentially from [--first] to [--last] MAC\n"
-           "        --random : scan randomly between [--first] and [--last] MAC\n"
-           "        --mac-file <FILE> : scan only MACs contained in FILE\n"
-           "\n"
-           "    REQUESTS:\n"
-           "        -w <MILLIS> : delay after each checking request\n"
-           "        -b <INT> : pause every INT checking request\n"
-           "        -d <MILLIS> : pause duration\n"
-           "        -t <MILLIS> : set timeout (default = 3000 ms)\n"
-           "        -s <INT> : stop after INT check (default = -1)\n"
-           "        --threads <INT> : parallel requests (default = 1)\n"
-           );
-    exit(exit_code);
-}
-
 #include <string.h>
 #include <ctype.h>
-
-#include <curl/curl.h>
 #include <pthread.h>
+#include <curl/curl.h>
 
 #include "src/shared.h"
 #include "src/utils.c"
 #include "src/proxies.c"
 #include "src/args.c"
 #include "src/macs.c"
+
+void usage(int exit_code) {
+    printf("USAGE: smac [" ARG_HOST_URL_LONG "] <server> [OPTS]\n"
+           "OPTS:\n"
+           "    TARGET:\n"
+           "        " ARG_HOST_URL_SHORT " <server> : server URL\n"
+           "\n"
+           "    SCAN MODE:\n"
+           "        " ARG_SEQUENTIAL_SCAN_LONG " : scan sequentially from [" ARG_MAC_FIRST_LONG "] to [" ARG_MAC_LAST_LONG "] MAC\n"
+           "        " ARG_RANDOM_SCAN_LONG     " : scan randomly between [" ARG_MAC_FIRST_LONG "] and [" ARG_MAC_LAST_LONG "] MAC\n"
+           "        " ARG_MAC_FILE_LONG " <FILE> : scan only MACs contained in FILE\n"
+           "\n"
+           "    REQUESTS:\n"
+           "        " ARG_REQUEST_DELAY_LONG   " <MILLIS> : delay after each checking request\n"
+           "        " ARG_PAUSE_COUNT_LONG     " <INT> : pause every INT checking request\n"
+           "        " ARG_PAUSE_DELAY_LONG     " <MILLIS> : pause duration\n"
+           "        " ARG_REQUEST_TIMEOUT_LONG " <MILLIS> : set timeout (default = 3000 ms)\n"
+           "        " ARG_STOP_COUNT_LONG          " <INT> : stop after INT check (default = 0)\n"
+           "        " ARG_THREADS_LONG             " <INT> : parallel requests (default = 1)\n"
+           );
+    exit(exit_code);
+}
 
 int MAC_COUNT = 0;
 int ACCOUNTS_COUNT = 0;

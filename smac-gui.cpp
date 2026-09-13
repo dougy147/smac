@@ -290,6 +290,21 @@ int main(int argc, char *argv[]) {
        if (!SCANNING && USE_CHECKPOINTS) load_checkpoint(to_cstr(entry_server_url->text()));
     });
 
+    /* reset check point button */
+    // TODO : enable only when a checkpoint exists
+    button_reset_checkpoint = w->findChild<QPushButton*>("button_reset_checkpoint");
+    button_reset_checkpoint->setToolTip("Reset server's checkpoint");
+    
+    QObject::connect(button_reset_checkpoint, &QPushButton::clicked, button_reset_checkpoint, [&]() {
+        yesnobox(button_reset_checkpoint,"Reset checkpoint","Reset this server's checkpoint?");
+
+        if (reply == QMessageBox::Yes) {
+            remove_checkpoint(to_cstr(entry_server_url->text()));
+            strcpy(mac_first,entry_settings_mac_first->text().toLocal8Bit().constData());
+            label_mac->setText(mac_first);
+            if (!SCANNING && SCAN_MODE == SEQUENTIAL) strcpy(mac,mac_first);
+        }
+    });
 
     /* Radio Buttons (sequential, random, mac file?) */
     radio_button_sequential  = w->findChild<QRadioButton*>("radio_button_sequential");
@@ -335,26 +350,9 @@ int main(int argc, char *argv[]) {
     busy_indicator = w->findChild<QProgressBar*>("busy_indicator");
     busy_indicator->setVisible(SCANNING);
 
-    /* reset check point button */
-
-    button_reset_checkpoint = w->findChild<QPushButton*>("button_reset_checkpoint");
-
-    QObject::connect(button_reset_checkpoint, &QPushButton::clicked, button_reset_checkpoint, [&]() {
-        yesnobox(button_reset_checkpoint,"Reset checkpoint","Reset checkpoint for that host?");
-
-        if (reply == QMessageBox::Yes) {
-            //char server_cstr[MAX_URL_LEN] = {0};
-            //strcpy(server_cstr, entry_server_url->text().toLocal8Bit().constData());
-            remove_checkpoint(to_cstr(entry_server_url->text()));
-            
-            strcpy(mac_first,entry_settings_mac_first->text().toLocal8Bit().constData());
-            label_mac->setText(mac_first);
-            if (!SCANNING && SCAN_MODE == SEQUENTIAL) strcpy(mac,mac_first);
-        }
-    });
-
     /* Threads Combobox */
     QComboBox *thread_combobox= w->findChild<QComboBox*>("thread_combobox");
+    thread_combobox->setToolTip("Number of simultaneous requests (use with parcimony)");
 
     for (int i=1;i <= (THREADS_LIMIT) ;i++) {
         thread_combobox->addItems({QString::number(i)});
@@ -374,6 +372,8 @@ int main(int argc, char *argv[]) {
 
     /* clear accoutns list */
     button_clear_list = w->findChild<QPushButton*>("button_clear_list");
+    button_clear_list->setToolTip("Clear accounts list");
+    
     QObject::connect(button_clear_list, &QPushButton::clicked, button_clear_list, [&]() {
         yesnobox(button_reset_checkpoint,"Clear accounts list","Clear accounts list?");
         if (reply == QMessageBox::Yes) {
@@ -468,18 +468,24 @@ int main(int argc, char *argv[]) {
         });
 
     entry_request_delay = w->findChild<QLineEdit*>("entry_request_delay");
+    entry_request_delay->setToolTip("Delay between two requests (in milliseconds)");
     entry_of_int(request_delay);
 
     entry_request_timeout = w->findChild<QLineEdit*>("entry_request_timeout");
+    entry_request_timeout->setToolTip("Consider request timeouted after this delay (in milliseconds)");
     entry_of_int(request_timeout);
     
     entry_pause_nb = w->findChild<QLineEdit*>("entry_pause_nb");
+    entry_pause_nb->setToolTip("Take a break after that number of requests");
     entry_of_int(pause_nb);
 
     entry_pause_duration = w->findChild<QLineEdit*>("entry_pause_duration");
+    // TODO: enabled only if entry_pause_nb is non-null
+    entry_pause_duration->setToolTip("If pause count is non-null. Set break duration (in milliseconds)");
     entry_of_int(pause_duration);
 
     entry_stop_count = w->findChild<QLineEdit*>("entry_stop_count");
+    entry_stop_count->setToolTip("Stop scanning after that number of requests");
 
     QIntValidator* validator_entry_stop_count = new QIntValidator(-1, 3600000, entry_stop_count);
     entry_stop_count->setValidator(validator_entry_stop_count);
@@ -490,6 +496,8 @@ int main(int argc, char *argv[]) {
 
 
     checkbox_settings_check_playable  = w->findChild<QCheckBox*>("checkbox_settings_check_playable");
+    checkbox_settings_check_playable->setToolTip("Ignore accounts if streams can not be played (depends on ffprobe)");
+    
     if (CHECK_PLAYABLE) {
         checkbox_settings_check_playable->setChecked(true);
     }
@@ -499,6 +507,8 @@ int main(int argc, char *argv[]) {
     });
 
     entry_genre_match = w->findChild<QLineEdit*>("entry_genre_match");
+    entry_genre_match->setToolTip("Ignore accounts when no genre matches provided string (ex: SPORT)");
+    
     QObject::connect(entry_genre_match, &QLineEdit::textChanged,entry_genre_match, []() { 
         strcpy(GENRE_PATTERN,  to_cstr(entry_genre_match->text()));
         trim(GENRE_PATTERN);

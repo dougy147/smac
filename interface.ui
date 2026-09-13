@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>435</width>
-    <height>570</height>
+    <height>573</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -234,6 +234,19 @@
       </property>
       <property name="text">
        <string>...</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="button_clear_list">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>370</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Clear</string>
       </property>
      </widget>
     </widget>
@@ -535,7 +548,7 @@
         <rect>
          <x>10</x>
          <y>0</y>
-         <width>71</width>
+         <width>81</width>
          <height>24</height>
         </rect>
        </property>

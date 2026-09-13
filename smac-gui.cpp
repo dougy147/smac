@@ -33,6 +33,7 @@ QLineEdit        *entry_server_url;
 QListView        *accounts_listview;
 QStringListModel *accounts_listview_model;
 QStringList      *accounts_list;
+QPushButton      *button_clear_list;
 QPushButton      *button_scan;
 QRadioButton     *radio_button_sequential;
 QRadioButton     *radio_button_random;
@@ -147,8 +148,15 @@ void GUI_scan_ended_by_itself() {
 }
 
 void GUI_clean_accounts_listview() {
+    
     accounts_listview_model->removeRows(0, accounts_listview_model->rowCount());
     accounts_listview->setModel(accounts_listview_model);
+    accounts_listview_model = new QStringListModel(); // initialize model
+    accounts_list           = new QStringList(); // initialize strings list
+    
+    accounts_listview_model->setStringList(*accounts_list); // connect string list to model
+    accounts_listview->setModel(accounts_listview_model); // connect model to listview
+
 }
 
 bool GUI_server_url_changed() {
@@ -240,8 +248,8 @@ int main(int argc, char *argv[]) {
     srand(time(NULL));
 
 //#ifdef _WIN32 // Hide useless widnows console
-//    HWND console = GetConsoleWindow();
-//    ShowWindow(console, SW_HIDE);
+//   HWND console = GetConsoleWindow();
+//   ShowWindow(console, SW_HIDE);
 //#endif
 
     if (NB_THREADS <= 0) {
@@ -363,6 +371,17 @@ int main(int argc, char *argv[]) {
     
     accounts_listview_model->setStringList(*accounts_list); // connect string list to model
     accounts_listview->setModel(accounts_listview_model); // connect model to listview
+
+    /* clear accoutns list */
+    button_clear_list = w->findChild<QPushButton*>("button_clear_list");
+    QObject::connect(button_clear_list, &QPushButton::clicked, button_clear_list, [&]() {
+        yesnobox(button_reset_checkpoint,"Clear accounts list","Clear accounts list?");
+        if (reply == QMessageBox::Yes) {
+            ACCOUNTS_COUNT = 0;
+            GUI_clean_accounts_listview();
+        }
+    });
+
 
     /* Scan button */ 
     button_scan = w->findChild<QPushButton*>("button_scan");

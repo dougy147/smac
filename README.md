@@ -22,8 +22,8 @@ Works on Windows and Linux.
 
 Download latest release for your platform.
 
-- Windows:
-- Linux: 
+- Linux: [https://github.com/dougy147/smac/releases/download/v0.0.1/smac-linux-0.0.1.tar.gz](https://github.com/dougy147/smac/releases/download/v0.0.1/smac-linux-0.0.1.tar.gz)
+- Windows: [https://github.com/dougy147/smac/releases/download/v0.0.1/smac-windows-0.0.1.zip](https://github.com/dougy147/smac/releases/download/v0.0.1/smac-windows-0.0.1.zip)
 
 Launch `smac` for the command-line version, or `smac-gui` for the graphical one.
 

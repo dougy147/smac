@@ -1,30 +1,28 @@
 cmake_minimum_required(VERSION 3.16)
-project(Smac VERSION 0.0.1 LANGUAGES CXX)
+project(smac VERSION 0.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_PREFIX_PATH "C:/msys64/mingw64/qt6-static")
 
-# check if this works to get icon on sloppy windowz
 set(app_icon_resource_windows "${CMAKE_CURRENT_SOURCE_DIR}/icon.rc")
     
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets UiTools OpenGL)
 qt_standard_project_setup()
 
-qt_add_executable(main-windows smac-gui.cpp ${app_icon_resource_windows})
+qt_add_executable(smac-gui ../smac-gui.cpp ${app_icon_resource_windows})
 
 # Manually specify curl
-target_include_directories(main-windows PRIVATE ./3rd/curl-8.21.0_6-win64-mingw/include)
-target_link_directories(main-windows PRIVATE ./3rd/curl-8.21.0_6-win64-mingw/lib)
+target_include_directories(smac-gui PRIVATE ../3rd/curl-8.21.0_6-win64-mingw/include)
+target_link_directories(smac-gui PRIVATE ../3rd/curl-8.21.0_6-win64-mingw/lib)
 
-target_link_libraries(main-windows PRIVATE 
+target_link_libraries(smac-gui PRIVATE 
     Qt6::Core 
     Qt6::Gui 
     Qt6::Widgets 
     Qt6::UiTools 
     Qt6::OpenGL
-    #C:/users/nerd/Desktop/smac2/3rd/curl-8.21.0_6-win64-mingw/lib/libcurl.dll.a
-    C:/users/nerd/Desktop/main-sendbuild/3rd/curl-8.21.0_6-win64-mingw/lib/libcurl.dll.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/../3rd/curl-8.21.0_6-win64-mingw/lib/libcurl.dll.a
 )
 
 
@@ -65,11 +63,10 @@ if(WIN32)
     )
     
     foreach(DLL ${REQUIRED_DLLS})
-        add_custom_command(TARGET main-windows POST_BUILD
+        add_custom_command(TARGET smac-gui POST_BUILD
 	    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	    #COMMAND ${CMAKE_COMMAND} -E copy
                 "${QT_DLL_PATH}/${DLL}"
-                "$<TARGET_FILE_DIR:main-windows>/${DLL}"
+                "$<TARGET_FILE_DIR:smac-gui>/${DLL}"
         )
     endforeach()
 endif()

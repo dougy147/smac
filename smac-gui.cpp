@@ -258,10 +258,10 @@ int main(int argc, char *argv[]) {
     
     srand(time(NULL));
 
-//#ifdef _WIN32 // Hide useless widnows console
-//   HWND console = GetConsoleWindow();
-//   ShowWindow(console, SW_HIDE);
-//#endif
+#ifdef _WIN32 // Hide useless widnows console
+   HWND console = GetConsoleWindow();
+   ShowWindow(console, SW_HIDE);
+#endif
 
     if (NB_THREADS <= 0) {
         fprintf(stderr,"[!] NB_THREADS must be a positive integer.\n");

@@ -1,5 +1,16 @@
 #define SMAC_GUI 1
 
+#define ABOUT_SMAC \
+    "Users should be warned about smac:\n" \
+    "    - beta version\n" \
+    "    - contains bugs or undefined behaviours\n" \
+    "    - driven by its author's educational motivations\n\n" \
+    "DO NOT USE SMAC IF YOU ARE AFRAID OF HUMAN WRITTEN CODE\n\n" \
+    "Feel free to propose modifications to the source code:\n\n" \
+    "    https://github.com/dougy147/smac\n\n" \
+    "If smac has been of any help to you, I'd be thankful for some coffee:\n\n" \
+    "    https://ko-fi.com/dougy147\n" \
+
 #include <QApplication>
 #include <QWidget>
 #include <QtUiTools/QUiLoader>
@@ -280,6 +291,12 @@ int main(int argc, char *argv[]) {
     QObject::connect(menu_quit, &QAction::triggered, menu_quit, [&]() {
         app.exit();
     });
+
+    QAction *menu_info = w->findChild<QAction*>("actionInfo");
+    QObject::connect(menu_info, &QAction::triggered, menu_info, [&]() {
+        okbox(w, "About - smac",ABOUT_SMAC);
+    });
+
 
     /* ============== MAIN SCAN TAB =================== */
     

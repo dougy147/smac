@@ -31,23 +31,42 @@ Launch `smac` for the command-line version, or `smac-gui` for the graphical one.
 
 ```console
 $ smac --help
-USAGE: smac [--url] <server> [OPTS]
+USAGE: smac [--url] <host> [OPTS]
 OPTS:
     TARGET:
-        -u <server> : server URL
+        --url <URL> : target host
 
     SCAN MODE:
         --seq : scan sequentially from [--first] to [--last] MAC
         --random : scan randomly between [--first] and [--last] MAC
-        --mac-file <FILE> : scan only MACs contained in FILE
+        --mac-file <FILE> : scan MACs contained in FILE
 
     REQUESTS:
-        --delay <MILLIS> : delay after each checking request
-        --pause <INT> : pause every INT checking request
+        --delay <MILLIS> : delay after each request
+        --pause <INT> : pause every INT request
         --pause-for <MILLIS> : pause duration
         --timeout <MILLIS> : set timeout (default = 3000 ms)
-        --stop <INT> : stop after INT check (default = 0)
+        --stop <INT> : stop after INT requests (default = 0)
+        --max-retry <INT> : retry failed request INT times (default = -1)
         --threads <INT> : parallel requests (default = 1)
+
+    PROXIES:
+        --proxy <PROXY> : use PROXY for all requests
+            |_ --proxy-username <USER> : optional
+            |_ --proxy-password <PASS> : optional
+        --proxy-file <FILE> : use list of proxies from FILE (automatic rotation)
+        --proxy-from-url <URL> : use list of proxies from URL (automatic rotation)
+
+    FILTER:
+        --genre-match <STR> : skip account when no genre matches STR
+        --playable : skip account if streams are not playable (ffprobe)
+
+    RESULTS:
+        --save-dir <DIR> : set folder for results and checkpoints storage
+        --no-checkpoint : do not use nor save checkpoints during this scan
+
+    MISC:
+        --prefix <PREFIX> : generate MACs starting with PREFIX during [--random] scan
 ```
     
 Those options are self-explorable via the graphical interface.

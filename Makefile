@@ -6,14 +6,14 @@ linux: linux-cli linux-gui
 
 windows: windows-cli windows-gui
 
-linux-gui: prepare-build generator smac-gui.cpp
+linux-gui: prepare-linux-build generator smac-gui.cpp
 	g++ -std=c++17 -fPIC smac-gui.cpp -o ./release/linux/$(EXE_GUI) \
 		$$(pkg-config --cflags Qt6Core Qt6Gui Qt6Widgets Qt6UiTools) \
 		$$(pkg-config --libs   Qt6Core Qt6Gui Qt6Widgets Qt6UiTools) \
 		-lcurl
 	cp interface.ui ./release/linux/ 2>/dev/null
 
-linux-cli: prepare-build generator smac.c
+linux-cli: prepare-linux-build generator smac.c
 	cc -o ./release/linux/$(EXE_CLI) smac.c \
 		-lcurl
 # TODO: static build
@@ -24,7 +24,7 @@ windows-gui:
 	# [NOTE] IF YOU ALREADY ARE IN MINGW64 SHELL, JUST RUN `make windows-mingw64`
 	C:/msys64/mingw64/bin/make.exe windows-gui-mingw64
 
-windows-gui-mingw64: prepare-build generator smac-gui.cpp windows/CMakeLists.txt
+windows-gui-mingw64: prepare-windows-build generator smac-gui.cpp windows/CMakeLists.txt
 	# [NOTE] YOU MUST EXECUTE THIS VIA `msys2/mingw64` SHELL
 	cd ./build && \
 		cmake -DCMAKE_PREFIX_PATH=C:/msys64/mingw64/qt6-static ../windows && \
@@ -39,7 +39,7 @@ windows-gui-mingw64: prepare-build generator smac-gui.cpp windows/CMakeLists.txt
 		./create_relative_shortcut.bat
 	rm ./release/windows/create_relative_shortcut.bat
 
-windows-cli: prepare-build generator smac.c
+windows-cli: prepare-windows-build generator smac.c
 	cc -o ./release/windows/src/$(EXE_CLI).exe smac.c \
 		-lcurl
 
@@ -48,10 +48,14 @@ generator: # this is to generate functions for multi-threads
 	./src/generator
 	rm ./src/generator
 
-prepare-build:
-	@rm -rf ./build 2>/dev/null
-	@mkdir -p ./build
-	@mkdir -p ./release/{linux,windows/{,src}}
+prepare-linux-build:
+	rm -rf ./release/linux 2>/dev/null
+	mkdir -p ./release/linux
+
+prepare-windows-build:
+	rm -rf ./build ./release/windows 2>/dev/null
+	mkdir -p ./build
+	mkdir -p ./release/windows/src
 
 pack-releases: pack-linux pack-windows
 
